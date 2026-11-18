@@ -88,12 +88,19 @@ struct SettingsView: View {
                     #endif
                 }
 
-                Section("About") {
+                Section {
                     HStack {
                         Text("Version")
                         Spacer()
                         Text(appVersion).foregroundStyle(Theme.secondaryText)
                     }
+                } header: {
+                    Text("About")
+                } footer: {
+                    Text("Developed by Jaisung NOH MD 2026")
+                        .font(.caption2)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 8)
                 }
             }
             .scrollContentBackground(.hidden)
