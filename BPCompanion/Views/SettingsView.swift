@@ -138,7 +138,7 @@ struct SettingsView: View {
                                         set: { bodyStore.setIncluded(name, $0) }))
                                     .tint(Theme.orange)
                                 }
-                                Text("Turn off apps that are not your scale. The old “BP” app is off by default: it saved the same weight with every blood pressure reading.")
+                                Text("Turn off apps that are not your scale. The old “BP” app is off by default: it saved the same weight with every blood pressure reading. With iCloud Sync on, this choice is the same on your iPhone and iPad.")
                                     .font(.caption)
                                     .foregroundStyle(Theme.secondaryText)
                             }
