@@ -55,6 +55,22 @@ extension View {
             .frame(maxWidth: .infinity)
     }
 
+    /// iOS/iPadOS 26 blurs content that scrolls under the top bar ("scroll edge effect").
+    /// With the tab bar merged into the navigation bar on iPad/Mac that blur covers the
+    /// first rows of the list, so it is turned off at the top. No-op on older systems.
+    @ViewBuilder
+    func noTopScrollBlur() -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            self.scrollEdgeEffectHidden(true, for: .top)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+
     /// Orange navigation bar with white title/buttons.
     func orangeNavigationBar() -> some View {
         self

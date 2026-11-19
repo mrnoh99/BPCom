@@ -11,15 +11,19 @@ struct RootView: View {
     var body: some View {
         TabView(selection: $tab) {
             HomeView()
+                .noTopScrollBlur()
                 .tabItem { Label("Home", systemImage: "house") }
                 .tag(0)
             HistoryView()
+                .noTopScrollBlur()
                 .tabItem { Label("History", systemImage: "list.bullet") }
                 .tag(1)
             ReportsView()
+                .noTopScrollBlur()
                 .tabItem { Label("Reports", systemImage: "chart.line.uptrend.xyaxis") }
                 .tag(2)
             SettingsView()
+                .noTopScrollBlur()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(3)
         }
