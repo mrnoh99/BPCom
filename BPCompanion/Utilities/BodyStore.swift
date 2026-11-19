@@ -2,7 +2,7 @@ import Foundation
 import HealthKit
 import SwiftUI
 
-/// Body composition read from Apple Health — weight, BMI, body fat and lean body mass —
+/// Body composition read from Apple Health — weight, BMI, body fat, lean body mass and height —
 /// as written by a smart scale app such as YUNMAI. Kept separate from the blood-pressure
 /// readings: nothing here is entered in BP Companion or attached to a reading.
 @MainActor
@@ -62,10 +62,15 @@ final class BodyStore: ObservableObject {
         let source: String
     }
 
-    static let readTypes: Set<HKObjectType> = Set(Metric.allCases.map { $0.type as HKObjectType })
-    static let readRequestedKey = "healthBodyReadRequested"
+    static let readTypes: Set<HKObjectType> =
+        Set(Metric.allCases.map { $0.type as HKObjectType }).union([HKQuantityType(.height)])
+    /// Bumped when a type is added (v2: height), so the permission sheet asks for it once.
+    static let readRequestedKey = "healthBodyReadRequested.v2"
 
     @Published private(set) var samples: [Metric: [Sample]] = [:]
+    /// Height in cm (YUNMAI writes it too). Shown in the Body tab; it rarely changes,
+    /// so it is not part of the period analysis.
+    @Published private(set) var heights: [Sample] = []
     @Published private(set) var loaded = false
     @Published private(set) var loading = false
 
@@ -77,11 +82,15 @@ final class BodyStore: ObservableObject {
 
     /// Every source app that has written body data (e.g. "YUNMAI").
     var sources: [String] {
-        Array(Set(samples.values.flatMap { $0.map(\.source) })).sorted()
+        Array(Set(samples.values.flatMap { $0.map(\.source) } + heights.map(\.source))).sorted()
     }
 
     func latest(_ m: Metric, source: String? = nil) -> Sample? {
         samples[m]?.last { source == nil || $0.source == source }
+    }
+
+    func latestHeight(source: String? = nil) -> Sample? {
+        heights.last { source == nil || $0.source == source }
     }
 
     // MARK: Loading
@@ -96,16 +105,17 @@ final class BodyStore: ObservableObject {
         }
         var result: [Metric: [Sample]] = [:]
         for m in Metric.allCases {
-            result[m] = await load(m)
+            result[m] = await load(m.type) { m.value(of: $0) }
         }
         samples = result
+        heights = await load(HKQuantityType(.height)) { $0.doubleValue(for: .meterUnit(with: .centi)) }
         startObservers()
     }
 
-    private func load(_ m: Metric) async -> [Sample] {
+    private func load(_ type: HKQuantityType, value: @escaping (HKQuantity) -> Double) async -> [Sample] {
         let sort = [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
         let found: [HKSample] = await withCheckedContinuation { c in
-            let q = HKSampleQuery(sampleType: m.type, predicate: nil, limit: HKObjectQueryNoLimit,
+            let q = HKSampleQuery(sampleType: type, predicate: nil, limit: HKObjectQueryNoLimit,
                                   sortDescriptors: sort) { _, s, _ in c.resume(returning: s ?? []) }
             store.execute(q)
         }
@@ -113,7 +123,7 @@ final class BodyStore: ObservableObject {
         return found.compactMap { s in
             guard let q = s as? HKQuantitySample,
                   q.sourceRevision.source.bundleIdentifier != own else { return nil }
-            return Sample(id: q.uuid, date: q.startDate, value: m.value(of: q.quantity),
+            return Sample(id: q.uuid, date: q.startDate, value: value(q.quantity),
                           source: q.sourceRevision.source.name)
         }
     }
