@@ -11,6 +11,10 @@ struct HistoryView: View {
     @State private var showAdd = false
     @State private var editing: Reading?
 
+    /// Blood pressure readings, or weigh-ins from Apple Health (YUNMAI).
+    private enum Mode: String, CaseIterable { case bp = "Blood Pressure", weight = "Weight" }
+    @State private var mode: Mode = .bp
+
     private struct MonthSection: Identifiable {
         let id: String
         let title: String
@@ -36,13 +40,27 @@ struct HistoryView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if readings.isEmpty {
-                    ContentUnavailableView("No Readings",
-                                           systemImage: "list.bullet.clipboard",
-                                           description: Text("Tap + to add a blood pressure reading."))
-                } else {
-                    list
+            VStack(spacing: 0) {
+                Picker("History", selection: $mode) {
+                    ForEach(Mode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .readableWidth(600)
+                .onChange(of: mode) { _, _ in editMode = .inactive }
+
+                switch mode {
+                case .bp:
+                    if readings.isEmpty {
+                        ContentUnavailableView("No Readings",
+                                               systemImage: "list.bullet.clipboard",
+                                               description: Text("Tap + to add a blood pressure reading."))
+                    } else {
+                        list
+                    }
+                case .weight:
+                    WeightHistoryList()
                 }
             }
             .background(Theme.background)
@@ -50,6 +68,7 @@ struct HistoryView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
+                    if mode == .bp {
                     Button {
                         withAnimation { editMode = editMode.isEditing ? .inactive : .active }
                     } label: {
@@ -57,6 +76,7 @@ struct HistoryView: View {
                             .font(.title2)
                     }
                     .accessibilityLabel(editMode.isEditing ? "Done" : "Edit")
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showAdd = true } label: {
