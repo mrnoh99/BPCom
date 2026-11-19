@@ -31,16 +31,44 @@ MAP = 이완기 + (수축기 − 이완기) / 3.
 
 iCloud 설정이 없거나 iCloud에 로그인되어 있지 않으면 앱은 자동으로 기기 내 저장소만 사용합니다.
 Settings 의 iCloud Sync 스위치 변경은 앱을 다시 실행해야 적용됩니다.
-App Store 배포 시에는 CloudKit Console에서 스키마를 Production 으로 Deploy 해야 합니다.
+
+## iCloud 동기화
+
+- 기록은 SwiftData + CloudKit 으로 사용자의 **개인(private) iCloud 데이터베이스**에 저장되어,
+  같은 Apple ID로 로그인한 모든 iPhone/iPad에 자동으로 동기화됩니다. (서버 비용 없음, 다른 사람은 볼 수 없음)
+- 이미 기기에 있던 기록은 동기화를 켜면 iCloud로 업로드됩니다.
+- **Settings › iCloud** 에서 계정 상태, 동기화 상태(Syncing… / Up to date / 오류), 마지막 동기화 시각을 볼 수 있습니다.
+  iCloud 기능이 설정되지 않은 빌드면 "iCloud unavailable – saved on this device"와 원인이 표시됩니다.
+
+### 확인 순서
+1. 위 빌드 방법 2–3단계(Team, iCloud 컨테이너 체크)를 완료합니다.
+2. 두 기기(또는 기기 + 시뮬레이터)에 같은 Apple ID로 iCloud 로그인 후 앱을 설치합니다.
+   시뮬레이터는 설정 앱에서 iCloud 로그인이 필요합니다.
+3. 한 기기에서 기록을 추가하면 다른 기기에 보통 수십 초 안에 나타납니다. 안 보이면 앱을 백그라운드로 보냈다가 다시 열어 보세요.
+4. 개발 중 데이터는 CloudKit **Development** 환경에 저장됩니다. TestFlight/App Store 배포 전에는
+   [CloudKit Console](https://icloud.developer.apple.com) 에서 스키마를 **Deploy Schema Changes → Production** 해야 합니다.
 
 ## CSV 형식
 
+기존 앱의 `BloodPressure_Data_YYYYMMDD.csv` 와 **같은 형식**으로 내보내고 가져옵니다.
+
 ```
-date,systolic,diastolic,pulse,weight,drug,note,starred
-2026-11-19 06:54,141,95,66,84.5,1,,0
+"Date Time","Period","Systolic (mmHg)","Diastolic (mmHg)","MAP (mmHg)","Heart Rate (bpm)","Weight (kg)","Drug","Note"
+"2026. 11. 19. 06:54","Morning","141","95","110","66","84.5","YES",""
+"2026. 11. 18. 21:12","Evening","149","91","110","70","84.5","YES",""
 ```
 
-가져오기 시 `date, systolic, diastolic` 열은 필수이며, 같은 시각·같은 값의 중복 기록은 건너뜁니다.
+- 모든 칸을 따옴표로 감싸고, 최신 기록이 맨 위, UTF-8, 파일 이름 `BloodPressure_Data_20261119.csv`
+- Period: Morning 04:00–11:59 · Day 12:00–17:59 · Evening 18:00–03:59
+- MAP = 이완기 + (수축기 − 이완기)/3 반올림, Drug = `YES`/`NO`, 체중이 없으면 빈칸
+- 가져오기: `Date Time`, `Systolic`, `Diastolic` 열은 필수. `Period`, `MAP` 은 다시 계산하므로 무시합니다.
+  같은 시각(분)·같은 혈압·맥박의 기록은 중복으로 보고 건너뜁니다. 이전 형식(`date,systolic,...`)도 읽을 수 있습니다.
+- ★(starred) 표시는 이 형식에 칸이 없어 내보내지 않습니다.
+
+### 가져오는 방법
+1. **Settings › Import (CSV)** 에서 파일 선택
+2. 또는 Files·메일·카카오톡 등에서 `.csv` 파일을 탭/공유 → **BP Companion** 선택 → "Import" 확인
+   (가져온 뒤 History 탭으로 이동). UTF-8, UTF-16, CP949(한글 Excel) 인코딩을 읽을 수 있습니다.
 
 ## 폴더 구조
 

@@ -1,46 +1,62 @@
 import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
+import SwiftData
 
 /// CSV import / export of readings.
 ///
-/// Format (header row required on import):
-/// `date,systolic,diastolic,pulse,weight,drug,note,starred`
-/// with `date` as `yyyy-MM-dd HH:mm`.
+/// Export format (same as the "BloodPressure_Data" files of the previous app):
+/// ```
+/// "Date Time","Period","Systolic (mmHg)","Diastolic (mmHg)","MAP (mmHg)","Heart Rate (bpm)","Weight (kg)","Drug","Note"
+/// "2026. 11. 19. 06:54","Morning","141","95","110","66","84.5","YES",""
+/// ```
+/// Every field is quoted, newest reading first, UTF-8, `\n` line endings.
+/// Import accepts this format and the older `date,systolic,diastolic,...` format.
 enum CSV {
-    static let header = ["date", "systolic", "diastolic", "pulse", "weight", "drug", "note", "starred"]
+    static let header = ["Date Time", "Period", "Systolic (mmHg)", "Diastolic (mmHg)", "MAP (mmHg)",
+                         "Heart Rate (bpm)", "Weight (kg)", "Drug", "Note"]
 
+    /// "2026. 11. 19. 06:54"
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd HH:mm"
+        f.dateFormat = "yyyy. M. d. HH:mm"
         return f
     }()
+
+    /// Morning 04:00–11:59, Day 12:00–17:59, Evening 18:00–03:59
+    static func period(of date: Date) -> String {
+        switch Calendar.current.component(.hour, from: date) {
+        case 4..<12: return "Morning"
+        case 12..<18: return "Day"
+        default: return "Evening"
+        }
+    }
 
     // MARK: Export
 
     static func export(_ readings: [Reading]) -> String {
-        var lines = [header.joined(separator: ",")]
-        for r in readings.sorted(by: { $0.date < $1.date }) {
+        var lines = [header.map(quote).joined(separator: ",")]
+        for r in readings.sorted(by: { $0.date > $1.date }) {
             let fields: [String] = [
                 dateFormatter.string(from: r.date),
+                period(of: r.date),
                 String(r.systolic),
                 String(r.diastolic),
+                String(Int(r.map.rounded())),
                 String(r.pulse),
                 r.weight.map { String(format: "%.1f", $0) } ?? "",
-                r.drug ? "1" : "0",
-                escape(r.note),
-                r.starred ? "1" : "0",
+                r.drug ? "YES" : "NO",
+                r.note,
             ]
-            lines.append(fields.joined(separator: ","))
+            lines.append(fields.map(quote).joined(separator: ","))
         }
-        return lines.joined(separator: "\n") + "\n"
+        return lines.joined(separator: "\n")
     }
 
-    private static func escape(_ s: String) -> String {
-        guard s.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" || $0 == "\r" }) else { return s }
-        return "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+    private static func quote(_ s: String) -> String {
+        "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
 
     // MARK: Import
@@ -74,8 +90,13 @@ enum CSV {
         table.removeAll { $0.allSatisfy { $0.trimmingCharacters(in: .whitespaces).isEmpty } }
         guard let head = table.first else { throw ImportError.empty }
 
-        let names = head.map { $0.trimmingCharacters(in: .whitespaces).lowercased().replacingOccurrences(of: "\u{FEFF}", with: "") }
-        func col(_ n: String) -> Int? { names.firstIndex(of: n) }
+        let names = head.map(normalize)
+        func col(_ n: String) -> Int? {
+            for alias in aliases[n] ?? [n] {
+                if let i = names.firstIndex(of: alias) { return i }
+            }
+            return nil
+        }
         let required = ["date", "systolic", "diastolic"]
         let missing = required.filter { col($0) == nil }
         guard missing.isEmpty else { throw ImportError.missingColumns(missing) }
@@ -104,17 +125,36 @@ enum CSV {
                             pulse: value("pulse").flatMap(Int.init) ?? 0,
                             weight: value("weight").flatMap(Double.init),
                             drug: bool("drug"),
-                            note: value("note") ?? "",
+                            note: col("note").flatMap { $0 < fields.count ? fields[$0] : nil } ?? "",   // kept verbatim
                             starred: bool("starred")))
         }
         return (rows, skipped)
+    }
+
+    /// Column name → accepted header spellings (after `normalize`).
+    private static let aliases: [String: [String]] = [
+        "date": ["date time", "date", "datetime", "date/time"],
+        "systolic": ["systolic", "sys", "sbp"],
+        "diastolic": ["diastolic", "dia", "dbp"],
+        "pulse": ["heart rate", "pulse", "hr", "bpm"],
+        "weight": ["weight"],
+        "drug": ["drug", "medication"],
+        "note": ["note", "notes", "memo"],
+        "starred": ["starred", "star"],
+    ]
+
+    /// "Systolic (mmHg)" → "systolic"
+    private static func normalize(_ h: String) -> String {
+        var s = h.replacingOccurrences(of: "\u{FEFF}", with: "")
+        if let i = s.firstIndex(of: "(") { s = String(s[..<i]) }
+        return s.trimmingCharacters(in: .whitespaces).lowercased()
     }
 
     private static func parseDate(_ s: String) -> Date? {
         if let d = dateFormatter.date(from: s) { return d }
         let iso = ISO8601DateFormatter()
         if let d = iso.date(from: s) { return d }
-        for format in ["yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm", "yyyy/MM/dd HH:mm", "yyyy. M. d. HH:mm", "yyyy-MM-dd"] {
+        for format in ["yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm", "yyyy/MM/dd HH:mm", "yyyy. M. d. HH:mm:ss", "yyyy-MM-dd"] {
             let f = DateFormatter()
             f.locale = Locale(identifier: "en_US_POSIX")
             f.dateFormat = format
@@ -175,5 +215,51 @@ struct CSVDocument: FileDocument {
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         FileWrapper(regularFileWithContents: Data(text.utf8))
+    }
+}
+
+/// Imports a CSV file (BloodPressure_Data format or the older format) into the store.
+/// Used by Settings › Import and by opening a .csv file with the app (Files, Mail, share sheet).
+enum CSVImporter {
+    /// Returns a user-facing summary, e.g. "Imported 485 readings."
+    @MainActor
+    static func importFile(at url: URL, into context: ModelContext) throws -> String {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+        let data = try Data(contentsOf: url)
+        let text: String
+        if data.starts(with: [0xFF, 0xFE]) || data.starts(with: [0xFE, 0xFF]),
+           let utf16 = String(data: data, encoding: .utf16) {
+            text = utf16                                                  // Excel "Unicode text"
+        } else {
+            text = String(data: data, encoding: .utf8)
+                ?? String(data: data, encoding: .init(rawValue: 0x80000422)) // CP949/EUC-KR (Korean Excel)
+                ?? String(decoding: data, as: UTF8.self)
+        }
+        let (rows, skipped) = try CSV.parse(text)
+
+        // Skip rows that already exist (same minute + same BP and pulse).
+        func key(_ d: Date, _ s: Int, _ dia: Int, _ p: Int) -> String {
+            "\(Int(d.timeIntervalSince1970 / 60))-\(s)-\(dia)-\(p)"
+        }
+        let existingReadings = try context.fetch(FetchDescriptor<Reading>())
+        var existing = Set(existingReadings.map { key($0.date, $0.systolic, $0.diastolic, $0.pulse) })
+        var added = 0, duplicates = 0
+        for r in rows {
+            let k = key(r.date, r.systolic, r.diastolic, r.pulse)
+            if existing.contains(k) { duplicates += 1; continue }
+            existing.insert(k)
+            context.insert(Reading(date: r.date, systolic: r.systolic, diastolic: r.diastolic,
+                                   pulse: r.pulse, weight: r.weight, drug: r.drug,
+                                   note: r.note, starred: r.starred))
+            added += 1
+        }
+        try context.save()
+
+        var parts = ["Imported \(added) readings."]
+        if duplicates > 0 { parts.append("\(duplicates) duplicates skipped.") }
+        if skipped > 0 { parts.append("\(skipped) unreadable rows skipped.") }
+        return parts.joined(separator: " ")
     }
 }

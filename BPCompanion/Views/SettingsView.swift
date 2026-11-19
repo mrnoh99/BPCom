@@ -18,7 +18,7 @@ struct SettingsView: View {
     @State private var confirmDeleteAll = false
     @State private var message: String?
 
-    private var iCloudSignedIn: Bool { FileManager.default.ubiquityIdentityToken != nil }
+    @EnvironmentObject private var sync: CloudSyncMonitor
 
     var body: some View {
         NavigationStack {
@@ -49,7 +49,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Data")
                 } footer: {
-                    Text("\(readings.count) readings stored. CSV columns: date (yyyy-MM-dd HH:mm), systolic, diastolic, pulse, weight, drug, note, starred.")
+                    Text("\(readings.count) readings stored. CSV format: \"Date Time\",\"Period\",\"Systolic (mmHg)\",\"Diastolic (mmHg)\",\"MAP (mmHg)\",\"Heart Rate (bpm)\",\"Weight (kg)\",\"Drug\",\"Note\" — e.g. \"2026. 11. 19. 06:54\",\"Morning\",\"141\",\"95\",\"110\",\"66\",\"84.5\",\"YES\",\"\"")
                 }
 
                 Section {
@@ -60,20 +60,36 @@ struct SettingsView: View {
                     HStack {
                         Text("iCloud Account")
                         Spacer()
-                        Text(iCloudSignedIn ? "Signed in" : "Not signed in")
-                            .foregroundStyle(iCloudSignedIn ? Theme.normal : Theme.secondaryText)
+                        Text(sync.account.text)
+                            .foregroundStyle(sync.account == .available ? Theme.normal : Theme.secondaryText)
                     }
                     HStack {
                         Text("Status")
                         Spacer()
-                        Text(statusText).foregroundStyle(Theme.secondaryText)
+                        if sync.syncing { ProgressView().padding(.trailing, 4) }
+                        Text(statusText)
+                            .foregroundStyle(statusIsError ? Theme.high : Theme.secondaryText)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    if sync.cloudEnabled {
+                        HStack {
+                            Text("Last Sync")
+                            Spacer()
+                            Text(sync.lastSync.map { $0.formatted(.relative(presentation: .named)) } ?? "–")
+                                .foregroundStyle(Theme.secondaryText)
+                        }
+                    }
+                    if let error = sync.lastError ?? sync.setupError {
+                        Text(error)
+                            .font(.footnote)
+                            .foregroundStyle(Theme.high)
                     }
                 } header: {
                     Text("iCloud")
                 } footer: {
                     Text(iCloudSync != launchICloudSync
                          ? "Restart the app (swipe it away and open it again) to apply this change."
-                         : "Readings are synced through your private iCloud database to every device signed in with the same Apple ID.")
+                         : "Readings are synced through your private iCloud database to every iPhone/iPad signed in with the same Apple ID. Changes usually appear on other devices within a minute while the app is open.")
                 }
 
                 Section {
@@ -111,7 +127,7 @@ struct SettingsView: View {
             .fileExporter(isPresented: $showExporter,
                           document: exportDoc,
                           contentType: .commaSeparatedText,
-                          defaultFilename: "BPCompanion-\(Date.now.formatted(.iso8601.year().month().day()))") { result in
+                          defaultFilename: "BloodPressure_Data_\(Self.fileDate.string(from: .now))") { result in
                 if case .failure(let error) = result { message = error.localizedDescription }
                 else { message = "Exported \(readings.count) readings." }
             }
@@ -139,9 +155,25 @@ struct SettingsView: View {
         }
     }
 
+    /// yyyyMMdd for the export file name (BloodPressure_Data_20261119.csv)
+    private static let fileDate: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyyMMdd"
+        return f
+    }()
+
     private var statusText: String {
         if !launchICloudSync { return "Local only" }
-        return iCloudSignedIn ? "Syncing" : "Waiting for iCloud sign-in"
+        if sync.setupError != nil { return "iCloud unavailable – saved on this device" }
+        if sync.account == .noAccount { return "Sign in to iCloud in the Settings app" }
+        if sync.syncing { return "Syncing…" }
+        if sync.lastError != nil { return "Sync error" }
+        return sync.lastSync == nil ? "Waiting for first sync" : "Up to date"
+    }
+
+    private var statusIsError: Bool {
+        launchICloudSync && (sync.setupError != nil || sync.lastError != nil)
     }
 
     private var appVersion: String {
@@ -151,35 +183,8 @@ struct SettingsView: View {
     }
 
     private func importCSV(_ url: URL) {
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         do {
-            let data = try Data(contentsOf: url)
-            let text = String(data: data, encoding: .utf8)
-                ?? String(data: data, encoding: .utf16)
-                ?? String(decoding: data, as: UTF8.self)
-            let (rows, skipped) = try CSV.parse(text)
-
-            // Skip rows that already exist (same minute + same values).
-            func key(_ d: Date, _ s: Int, _ dia: Int) -> String {
-                "\(Int(d.timeIntervalSince1970 / 60))-\(s)-\(dia)"
-            }
-            var existing = Set(readings.map { key($0.date, $0.systolic, $0.diastolic) })
-            var added = 0, duplicates = 0
-            for r in rows {
-                let k = key(r.date, r.systolic, r.diastolic)
-                if existing.contains(k) { duplicates += 1; continue }
-                existing.insert(k)
-                context.insert(Reading(date: r.date, systolic: r.systolic, diastolic: r.diastolic,
-                                       pulse: r.pulse, weight: r.weight, drug: r.drug,
-                                       note: r.note, starred: r.starred))
-                added += 1
-            }
-            try context.save()
-            var parts = ["Imported \(added) readings."]
-            if duplicates > 0 { parts.append("\(duplicates) duplicates skipped.") }
-            if skipped > 0 { parts.append("\(skipped) unreadable rows skipped.") }
-            message = parts.joined(separator: " ")
+            message = try CSVImporter.importFile(at: url, into: context)
         } catch {
             message = "Import failed: \(error.localizedDescription)"
         }

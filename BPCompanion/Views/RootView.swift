@@ -1,7 +1,12 @@
 import SwiftUI
+import SwiftData
 
 struct RootView: View {
+    @Environment(\.modelContext) private var context
     @State private var tab = 0
+    @State private var pendingImport: URL?
+    @State private var showImportDialog = false
+    @State private var importMessage: String?
 
     var body: some View {
         TabView(selection: $tab) {
@@ -20,5 +25,33 @@ struct RootView: View {
         }
         .toolbarBackground(Theme.tabBar, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
+        // A .csv opened from Files / Mail / KakaoTalk / share sheet ("Open in BP Companion")
+        .onOpenURL { url in
+            guard url.isFileURL else { return }
+            pendingImport = url
+            showImportDialog = true
+        }
+        .confirmationDialog("Import blood pressure data?",
+                            isPresented: $showImportDialog,
+                            titleVisibility: .visible,
+                            presenting: pendingImport) { url in
+            Button("Import") {
+                do {
+                    importMessage = try CSVImporter.importFile(at: url, into: context)
+                    tab = 1
+                } catch {
+                    importMessage = "Import failed: \(error.localizedDescription)"
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { url in
+            Text(url.lastPathComponent)
+        }
+        .alert("BP Companion",
+               isPresented: Binding(get: { importMessage != nil }, set: { if !$0 { importMessage = nil } })) {
+            Button("OK") { importMessage = nil }
+        } message: {
+            Text(importMessage ?? "")
+        }
     }
 }
