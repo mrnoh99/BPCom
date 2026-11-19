@@ -20,7 +20,7 @@
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>BP Companion saves your blood pressure and heart rate readings to the Health app.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>BP Companion reads weight, BMI, body fat percentage and lean body mass (for example from the YUNMAI scale app) to show and analyse them in the Body tab. It does not read other health data.</string>
+	<string>BP Companion reads weight, BMI, body fat percentage, lean body mass and height (for example from the YUNMAI scale app) to show and analyse them in the Body tab. It does not read other health data.</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
 	<key>UIBackgroundModes</key>

@@ -24,7 +24,7 @@ struct BodyView: View {
                 } else if !readBody {
                     unavailable("Body Data Is Off",
                                 "Turn on Settings › Apple Health › Read Body Data to see weight, BMI, body fat and lean mass from your scale app.")
-                } else if body_.loaded && body_.samples.values.allSatisfy({ $0.isEmpty }) {
+                } else if body_.loaded && body_.samples.values.allSatisfy({ $0.isEmpty }) && body_.heights.isEmpty {
                     unavailable("No Body Data",
                                 "No weight or body composition found in Health. In the YUNMAI app, turn on Health sharing (Me › Connect to Health), then allow BP Companion to read it in Health › Sharing › Apps.")
                 } else {
@@ -107,6 +107,7 @@ struct BodyView: View {
                     tile(m)
                 }
             }
+            heightTile
         }
         .padding(12)
     }
@@ -128,6 +129,27 @@ struct BodyView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(Theme.cell, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// Height from the scale app (latest value; it rarely changes).
+    private var heightTile: some View {
+        let h = body_.latestHeight(source: source)
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text("Height").font(.caption).foregroundStyle(Theme.secondaryText)
+            Spacer()
+            Text(h.map { String(format: "%.1f", $0.value) } ?? "–")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Theme.primaryText)
+                .monospacedDigit()
+            Text("cm").font(.caption).foregroundStyle(Theme.secondaryText)
+            if let h {
+                Text(h.date.formatted(.dateTime.year().month().day()))
+                    .font(.caption2)
+                    .foregroundStyle(Theme.secondaryText)
+            }
+        }
         .padding(10)
         .background(Theme.cell, in: RoundedRectangle(cornerRadius: 10))
     }
