@@ -31,7 +31,22 @@ MAP = 이완기 + (수축기 − 이완기) / 3.
 
 iCloud 설정이 없거나 iCloud에 로그인되어 있지 않으면 앱은 자동으로 기기 내 저장소만 사용합니다.
 Settings 의 iCloud Sync 스위치 변경은 앱을 다시 실행해야 적용됩니다.
-App Store 배포 시에는 CloudKit Console에서 스키마를 Production 으로 Deploy 해야 합니다.
+
+## iCloud 동기화
+
+- 기록은 SwiftData + CloudKit 으로 사용자의 **개인(private) iCloud 데이터베이스**에 저장되어,
+  같은 Apple ID로 로그인한 모든 iPhone/iPad에 자동으로 동기화됩니다. (서버 비용 없음, 다른 사람은 볼 수 없음)
+- 이미 기기에 있던 기록은 동기화를 켜면 iCloud로 업로드됩니다.
+- **Settings › iCloud** 에서 계정 상태, 동기화 상태(Syncing… / Up to date / 오류), 마지막 동기화 시각을 볼 수 있습니다.
+  iCloud 기능이 설정되지 않은 빌드면 "iCloud unavailable – saved on this device"와 원인이 표시됩니다.
+
+### 확인 순서
+1. 위 빌드 방법 2–3단계(Team, iCloud 컨테이너 체크)를 완료합니다.
+2. 두 기기(또는 기기 + 시뮬레이터)에 같은 Apple ID로 iCloud 로그인 후 앱을 설치합니다.
+   시뮬레이터는 설정 앱에서 iCloud 로그인이 필요합니다.
+3. 한 기기에서 기록을 추가하면 다른 기기에 보통 수십 초 안에 나타납니다. 안 보이면 앱을 백그라운드로 보냈다가 다시 열어 보세요.
+4. 개발 중 데이터는 CloudKit **Development** 환경에 저장됩니다. TestFlight/App Store 배포 전에는
+   [CloudKit Console](https://icloud.developer.apple.com) 에서 스키마를 **Deploy Schema Changes → Production** 해야 합니다.
 
 ## CSV 형식
 

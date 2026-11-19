@@ -18,7 +18,7 @@ struct SettingsView: View {
     @State private var confirmDeleteAll = false
     @State private var message: String?
 
-    private var iCloudSignedIn: Bool { FileManager.default.ubiquityIdentityToken != nil }
+    @EnvironmentObject private var sync: CloudSyncMonitor
 
     var body: some View {
         NavigationStack {
@@ -60,20 +60,36 @@ struct SettingsView: View {
                     HStack {
                         Text("iCloud Account")
                         Spacer()
-                        Text(iCloudSignedIn ? "Signed in" : "Not signed in")
-                            .foregroundStyle(iCloudSignedIn ? Theme.normal : Theme.secondaryText)
+                        Text(sync.account.text)
+                            .foregroundStyle(sync.account == .available ? Theme.normal : Theme.secondaryText)
                     }
                     HStack {
                         Text("Status")
                         Spacer()
-                        Text(statusText).foregroundStyle(Theme.secondaryText)
+                        if sync.syncing { ProgressView().padding(.trailing, 4) }
+                        Text(statusText)
+                            .foregroundStyle(statusIsError ? Theme.high : Theme.secondaryText)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    if sync.cloudEnabled {
+                        HStack {
+                            Text("Last Sync")
+                            Spacer()
+                            Text(sync.lastSync.map { $0.formatted(.relative(presentation: .named)) } ?? "–")
+                                .foregroundStyle(Theme.secondaryText)
+                        }
+                    }
+                    if let error = sync.lastError ?? sync.setupError {
+                        Text(error)
+                            .font(.footnote)
+                            .foregroundStyle(Theme.high)
                     }
                 } header: {
                     Text("iCloud")
                 } footer: {
                     Text(iCloudSync != launchICloudSync
                          ? "Restart the app (swipe it away and open it again) to apply this change."
-                         : "Readings are synced through your private iCloud database to every device signed in with the same Apple ID.")
+                         : "Readings are synced through your private iCloud database to every iPhone/iPad signed in with the same Apple ID. Changes usually appear on other devices within a minute while the app is open.")
                 }
 
                 Section {
@@ -141,7 +157,15 @@ struct SettingsView: View {
 
     private var statusText: String {
         if !launchICloudSync { return "Local only" }
-        return iCloudSignedIn ? "Syncing" : "Waiting for iCloud sign-in"
+        if sync.setupError != nil { return "iCloud unavailable – saved on this device" }
+        if sync.account == .noAccount { return "Sign in to iCloud in the Settings app" }
+        if sync.syncing { return "Syncing…" }
+        if sync.lastError != nil { return "Sync error" }
+        return sync.lastSync == nil ? "Waiting for first sync" : "Up to date"
+    }
+
+    private var statusIsError: Bool {
+        launchICloudSync && (sync.setupError != nil || sync.lastError != nil)
     }
 
     private var appVersion: String {
