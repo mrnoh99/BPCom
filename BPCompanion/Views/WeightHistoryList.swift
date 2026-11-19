@@ -27,12 +27,14 @@ struct WeightHistoryList: View {
         let items: [Measurement]
     }
 
+    private var measurements: [Measurement] { Self.measurements(from: bodyStore.samples) }
+
     /// Joins the separate Health samples (weight, BMI, fat, lean) of one weigh-in by
-    /// source and minute, newest first.
-    private var measurements: [Measurement] {
+    /// source and minute, newest first. Also used by the Body tab's history.
+    static func measurements(from samples: [BodyStore.Metric: [BodyStore.Sample]]) -> [Measurement] {
         var byKey: [String: Measurement] = [:]
         for m in BodyStore.Metric.allCases {
-            for s in bodyStore.samples[m] ?? [] {
+            for s in samples[m] ?? [] {
                 let minute = Int(s.date.timeIntervalSince1970 / 60)
                 let key = "\(s.source)|\(minute)"
                 var item = byKey[key] ?? Measurement(id: key, date: s.date, source: s.source)
@@ -147,7 +149,7 @@ struct WeightHistoryList: View {
     }
 }
 
-private struct WeightRow: View {
+struct WeightRow: View {
     let m: WeightHistoryList.Measurement
 
     var body: some View {

@@ -11,6 +11,7 @@ struct BodyView: View {
     @State private var showCustom = false
     @State private var metric: BodyStore.Metric = .weight
     @State private var source: String?        // nil = all apps
+    @State private var showAllHistory = false
 
     typealias Metric = BodyStore.Metric
 
@@ -40,6 +41,8 @@ struct BodyView: View {
                             trend
                             Theme.separator.frame(height: 4)
                             analysis
+                            Theme.separator.frame(height: 4)
+                            history
                         }
                         .readableWidth()
                     }
@@ -249,6 +252,45 @@ struct BodyView: View {
                 .frame(height: 240)
                 .padding(.horizontal, 10)
                 .padding(.bottom, 10)
+            }
+        }
+    }
+
+    /// Weigh-ins of the period, newest first (first 10, then "Show all").
+    private var history: some View {
+        let all = WeightHistoryList.measurements(from: body_.samples)
+            .filter { period.contains($0.date) && (source == nil || $0.source == source) }
+        let shown = showAllHistory ? all : Array(all.prefix(10))
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("HISTORY")
+                    .font(.title3)
+                    .foregroundStyle(Theme.label)
+                Text("· \(all.count)")
+                    .foregroundStyle(Theme.secondaryText)
+                Spacer()
+            }
+            .padding(12)
+            if all.isEmpty {
+                Text("No weigh-ins in this period.")
+                    .foregroundStyle(Theme.secondaryText)
+                    .padding([.horizontal, .bottom], 12)
+            } else {
+                ForEach(shown) { m in
+                    WeightRow(m: m)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                    Rectangle().fill(Theme.gridLine).frame(height: 0.5).padding(.leading, 66)
+                }
+                if all.count > 10 {
+                    Button(showAllHistory ? "Show less" : "Show all \(all.count)") {
+                        withAnimation { showAllHistory.toggle() }
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.label)
+                    .frame(maxWidth: .infinity)
+                    .padding(12)
+                }
             }
         }
     }
