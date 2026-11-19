@@ -17,6 +17,10 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>BP Companion saves your blood pressure, heart rate and weight readings to the Health app.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>BP Companion only writes your readings to the Health app; it does not read other health data.</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
 	<key>UIBackgroundModes</key>

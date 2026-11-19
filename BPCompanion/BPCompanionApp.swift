@@ -65,6 +65,7 @@ struct BPCompanionApp: App {
 
 enum SettingsKey {
     static let iCloudSync = "iCloudSyncEnabled"
+    static let healthEnabled = "healthEnabled"
     static let ownerName = "ownerName"
     static let defaultOwnerName = "Jaisung NOH"
 }
