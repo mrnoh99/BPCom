@@ -89,6 +89,13 @@ final class BodyStore: ObservableObject {
         samples[m]?.last { source == nil || $0.source == source }
     }
 
+    /// BMI / fat / lean arrive but no weight at all: Health returns nothing (no error)
+    /// when read access to Weight is off, so this is almost always that permission.
+    var weightAccessLikelyOff: Bool {
+        (samples[.weight] ?? []).isEmpty &&
+        [Metric.bmi, .bodyFat, .leanMass].contains { !(samples[$0] ?? []).isEmpty }
+    }
+
     func latestHeight(source: String? = nil) -> Sample? {
         heights.last { source == nil || $0.source == source }
     }
