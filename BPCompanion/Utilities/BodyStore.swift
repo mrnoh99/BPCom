@@ -119,10 +119,8 @@ final class BodyStore: ObservableObject {
                                   sortDescriptors: sort) { _, s, _ in c.resume(returning: s ?? []) }
             store.execute(q)
         }
-        let own = Bundle.main.bundleIdentifier
         return found.compactMap { s in
-            guard let q = s as? HKQuantitySample,
-                  q.sourceRevision.source.bundleIdentifier != own else { return nil }
+            guard let q = s as? HKQuantitySample, !Self.isFromBPCompanion(q) else { return nil }
             return Sample(id: q.uuid, date: q.startDate, value: value(q.quantity),
                           source: q.sourceRevision.source.name)
         }
@@ -139,6 +137,24 @@ final class BodyStore: ObservableObject {
             store.execute(q)
             observers.append(q)
         }
+    }
+
+    /// Samples BP Companion wrote itself (older versions saved weight to Health) are not
+    /// scale data and are left out — matched by bundle ID, by the reading-ID metadata
+    /// every BP Companion sample carries, and by app name (an earlier build may have had
+    /// another bundle ID).
+    static func isFromBPCompanion(_ s: HKSample) -> Bool {
+        let source = s.sourceRevision.source
+        if source.bundleIdentifier == Bundle.main.bundleIdentifier { return true }
+        if s.metadata?[HealthSync.readingKey] != nil { return true }
+        let ownName = (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String) ?? "BP Companion"
+        return source.name == ownName || source.name.localizedCaseInsensitiveContains("BP Companion")
+    }
+
+    /// Clears what was loaded so the next refresh starts clean (after deleting samples).
+    func reset() {
+        samples = [:]
+        heights = []
     }
 
     // MARK: Analysis helpers
