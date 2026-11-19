@@ -87,12 +87,55 @@ final class BodyStore: ObservableObject {
     static let excludedSourcesKey = "bodyExcludedSources"
     static let defaultExcludedSources = ["BP"]
 
+    /// Kept in iCloud key-value storage (when iCloud Sync is on) so iPhone and iPad
+    /// use the same choice, with a local copy in UserDefaults for offline / sync off.
     var excludedSources: Set<String> {
         get { Set(UserDefaults.standard.stringArray(forKey: Self.excludedSourcesKey) ?? Self.defaultExcludedSources) }
         set {
-            UserDefaults.standard.set(Array(newValue).sorted(), forKey: Self.excludedSourcesKey)
+            let list = Array(newValue).sorted()
+            UserDefaults.standard.set(list, forKey: Self.excludedSourcesKey)
+            if Self.cloudSyncOn {
+                NSUbiquitousKeyValueStore.default.set(list, forKey: Self.excludedSourcesKey)
+                NSUbiquitousKeyValueStore.default.synchronize()
+            }
+            sourceChoiceVersion += 1
             applyFilter()
         }
+    }
+
+    /// Bumped when the source choice changes (here or on the other device) to refresh views.
+    @Published private(set) var sourceChoiceVersion = 0
+
+    private static var cloudSyncOn: Bool {
+        UserDefaults.standard.object(forKey: SettingsKey.iCloudSync) as? Bool ?? true
+    }
+
+    private init() {
+        guard Self.cloudSyncOn else { return }
+        let kvs = NSUbiquitousKeyValueStore.default
+        NotificationCenter.default.addObserver(
+            forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: kvs, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.pullCloudChoice() }
+            }
+        kvs.synchronize()
+        if kvs.array(forKey: Self.excludedSourcesKey) == nil,
+           let local = UserDefaults.standard.stringArray(forKey: Self.excludedSourcesKey) {
+            // First device to run this version: publish its choice to iCloud.
+            kvs.set(local, forKey: Self.excludedSourcesKey)
+            kvs.synchronize()
+        } else {
+            pullCloudChoice()
+        }
+    }
+
+    /// The other device changed the choice: take it over locally and re-filter.
+    private func pullCloudChoice() {
+        guard let list = NSUbiquitousKeyValueStore.default.array(forKey: Self.excludedSourcesKey) as? [String] else { return }
+        guard list.sorted() != (UserDefaults.standard.stringArray(forKey: Self.excludedSourcesKey) ?? []).sorted() else { return }
+        UserDefaults.standard.set(list, forKey: Self.excludedSourcesKey)
+        sourceChoiceVersion += 1
+        applyFilter()
     }
 
     func isIncluded(_ source: String) -> Bool { !excludedSources.contains(source) }
