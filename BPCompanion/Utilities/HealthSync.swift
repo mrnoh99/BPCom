@@ -15,7 +15,9 @@ final class HealthSync: ObservableObject {
     /// Custom metadata key holding the reading's UUID (used to delete a reading's samples).
     static let readingKey = "BPCompanionReadingID"
 
-    private let store = HKHealthStore()
+    let store = HKHealthStore()
+    var weightObserver: HKObserverQuery?
+    static let weightReadRequestedKey = "healthWeightReadRequested"
 
     @Published private(set) var busy = false
     /// Last error from writing to Health (shown in Settings).
@@ -59,14 +61,21 @@ final class HealthSync: ObservableObject {
 
     func requestAuthorization() async throws {
         guard isAvailable else { throw HealthError.unavailable }
-        let types = Set<HKSampleType>(quantityTypes)
+        // Write: BP, heart rate, weight (when "Write to Health" is on).
+        // Read: weight only (when "Import Weight" is on) — e.g. from the YUNMAI scale app.
+        let share: Set<HKSampleType> = UserDefaults.standard.bool(forKey: SettingsKey.healthEnabled)
+            ? Set(quantityTypes) : []
+        let read: Set<HKObjectType> = UserDefaults.standard.bool(forKey: SettingsKey.healthImportWeight)
+            ? [HKQuantityType(.bodyMass)] : []
+        guard !share.isEmpty || !read.isEmpty else { return }
         defer { accessChecked += 1 }
         do {
             try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
-                store.requestAuthorization(toShare: types, read: nil) { _, error in
+                store.requestAuthorization(toShare: share, read: read) { _, error in
                     if let error { c.resume(throwing: error) } else { c.resume() }
                 }
             }
+            if !read.isEmpty { UserDefaults.standard.set(true, forKey: Self.weightReadRequestedKey) }
         } catch {
             // Typically "Missing com.apple.developer.healthkit entitlement" when the
             // HealthKit capability is not enabled for the signing team / App ID.
@@ -78,19 +87,25 @@ final class HealthSync: ObservableObject {
     /// Called when the app becomes active. The first time, it shows the Health permission
     /// sheet (that is what makes "BP Companion" appear in Health › Sharing › Apps /
     /// Data Sources) and then copies all existing readings to Health once.
-    func autoConnectIfNeeded(_ context: ModelContext) {
+    func autoConnectIfNeeded(_ context: ModelContext) async {
         guard isEnabled, !didAutoConnect else { return }
         didAutoConnect = true
-        Task {
-            if access == .notAsked { try? await requestAuthorization() }
-            guard access == .allowed,
-                  !UserDefaults.standard.bool(forKey: Self.initialSyncDoneKey) else { return }
-            let readings = (try? context.fetch(FetchDescriptor<Reading>())) ?? []
-            guard !readings.isEmpty else { return }   // wait until there is data (e.g. from iCloud)
-            if (try? await sendAll(readings)) != nil {
-                UserDefaults.standard.set(true, forKey: Self.initialSyncDoneKey)
-            }
+        if access == .notAsked { try? await requestAuthorization() }
+        guard access == .allowed,
+              !UserDefaults.standard.bool(forKey: Self.initialSyncDoneKey) else { return }
+        let readings = (try? context.fetch(FetchDescriptor<Reading>())) ?? []
+        guard !readings.isEmpty else { return }   // wait until there is data (e.g. from iCloud)
+        if (try? await sendAll(readings)) != nil {
+            UserDefaults.standard.set(true, forKey: Self.initialSyncDoneKey)
         }
+    }
+
+    /// App became active: permission (first time) → copy readings → import today's weigh-ins.
+    /// One after another, so the Health permission sheet is shown only once.
+    func onBecameActive(_ context: ModelContext) async {
+        await autoConnectIfNeeded(context)
+        startWeightObserver(context)
+        await importTodayWeights(context)
     }
 
     // MARK: Writing
@@ -110,7 +125,8 @@ final class HealthSync: ObservableObject {
             systolic = r.systolic
             diastolic = r.diastolic
             pulse = r.pulse
-            weight = r.weight
+            // A weight imported from another app is already in Health — don't write it again.
+            weight = r.weightSourceID == nil ? r.weight : nil
         }
     }
 

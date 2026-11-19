@@ -17,6 +17,11 @@ final class Reading {
     var drug: Bool = false
     var note: String = ""
     var starred: Bool = false
+    /// Health sample UUID when `weight` came from another app via Apple Health (e.g. YUNMAI).
+    /// Also kept after the user clears that weight, so the same weigh-in is not imported again.
+    var weightSourceID: String?
+    /// Name of the app the imported weight came from (e.g. "YUNMAI").
+    var weightSourceName: String?
 
     init(date: Date = .now,
          systolic: Int,

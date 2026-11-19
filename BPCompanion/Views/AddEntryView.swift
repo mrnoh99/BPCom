@@ -24,6 +24,9 @@ struct AddEntryView: View {
     @State private var weightWhole: Int
     @State private var weightTenth: Int
     @State private var hasWeight: Bool
+    /// Set when the weight came from Health (e.g. YUNMAI); cleared when the user turns the wheel.
+    @State private var weightSourceID: String?
+    @State private var weightSourceName: String?
 
     @State private var note: String
     @State private var starred: Bool
@@ -52,6 +55,8 @@ struct AddEntryView: View {
         // New entries start with no weight ("--.-"); turning the kg wheel sets one.
         // The wheel still starts at the last weight for convenience. Edits keep their weight.
         _hasWeight = State(initialValue: editing?.weight != nil)
+        _weightSourceID = State(initialValue: editing?.weightSourceID)
+        _weightSourceName = State(initialValue: editing?.weightSourceName)
 
         _note = State(initialValue: editing?.note ?? "")
         _starred = State(initialValue: editing?.starred ?? false)
@@ -99,6 +104,7 @@ struct AddEntryView: View {
             }
         }
         .presentationBackground(Theme.orangeDeep)
+        .task { await prefillWeightFromHealth() }
     }
 
     // MARK: Tabs header
@@ -251,6 +257,11 @@ struct AddEntryView: View {
                                 .font(.system(size: 30))
                                 .monospacedDigit()
                             Text("kg").font(.subheadline)
+                            if hasWeight, weightSourceID != nil {
+                                Label("From Health · \(weightSourceName ?? "")", systemImage: "heart.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.9))
+                            }
                         }
                         .padding(.vertical, 6)
                         .padding(.horizontal, 12)
@@ -267,8 +278,8 @@ struct AddEntryView: View {
 
             wheelArea {
                 HStack(spacing: 0) {
-                    wheel(Binding(get: { weightWhole }, set: { weightWhole = $0; hasWeight = true }), 20...250)
-                    wheel(Binding(get: { weightTenth }, set: { weightTenth = $0; hasWeight = true }), 0...9, prefix: ".")
+                    wheel(Binding(get: { weightWhole }, set: { weightWhole = $0; markManualWeight() }), 20...250)
+                    wheel(Binding(get: { weightTenth }, set: { weightTenth = $0; markManualWeight() }), 0...9, prefix: ".")
                     unit("kg")
                 }
             }
@@ -364,16 +375,43 @@ struct AddEntryView: View {
             r.drug = drug
             r.note = note
             r.starred = starred
+            r.weightSourceID = weightSourceID
+            r.weightSourceName = weightSourceName
             try? context.save()
             HealthSync.shared.upsert([r])
         } else {
             let r = Reading(date: date, systolic: s, diastolic: d, pulse: p,
                             weight: w, drug: drug, note: note, starred: starred)
+            r.weightSourceID = weightSourceID
+            r.weightSourceName = weightSourceName
             context.insert(r)
             try? context.save()
             HealthSync.shared.upsert([r])
+            // A weigh-in that arrived after this screen opened still goes to its nearest reading.
+            Task { await HealthSync.shared.importTodayWeights(context) }
         }
         dismiss()
+    }
+
+    /// Weight typed with the wheel is the user's own, not the imported one.
+    private func markManualWeight() {
+        hasWeight = true
+        weightSourceID = nil
+        weightSourceName = nil
+    }
+
+    /// New reading today: if a weigh-in from another app (YUNMAI etc.) is in Health and this
+    /// reading is the closest one to it, fill the weight in automatically.
+    private func prefillWeightFromHealth() async {
+        guard editing == nil, !hasWeight,
+              let sample = await HealthSync.shared.suggestedWeight(at: date, context: context),
+              !hasWeight else { return }
+        let tenths = Int((sample.kg * 10).rounded())
+        weightWhole = tenths / 10
+        weightTenth = tenths % 10
+        hasWeight = true
+        weightSourceID = sample.id
+        weightSourceName = sample.source
     }
 }
 

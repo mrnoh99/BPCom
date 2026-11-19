@@ -21,6 +21,8 @@ struct SettingsView: View {
     @State private var dataResultIsError = false
 
     @AppStorage(SettingsKey.healthEnabled) private var healthEnabled = true
+    @AppStorage(SettingsKey.healthImportWeight) private var healthImportWeight = true
+    @State private var weightResult: String?
     @StateObject private var health = HealthSync.shared
     @Environment(\.openURL) private var openURL
     @State private var healthResult: String?
@@ -121,6 +123,26 @@ struct SettingsView: View {
                                 .font(.footnote)
                                 .foregroundStyle(Theme.secondaryText)
                         }
+                        Toggle(isOn: $healthImportWeight) {
+                            Label("Import Weight (YUNMAI etc.)", systemImage: "scalemass")
+                        }
+                        .tint(Theme.orange)
+                        .onChange(of: healthImportWeight) { _, on in
+                            if on { importWeights(pastToo: false) } else { weightResult = nil }
+                        }
+                        if healthImportWeight {
+                            Button {
+                                importWeights(pastToo: true)
+                            } label: {
+                                Label("Import Past Weights from Health", systemImage: "arrow.down.heart")
+                            }
+                            .disabled(readings.isEmpty)
+                        }
+                        if let weightResult {
+                            Text(weightResult)
+                                .font(.footnote)
+                                .foregroundStyle(Theme.secondaryText)
+                        }
                         if let error = health.lastError {
                             Text(error)
                                 .font(.footnote)
@@ -129,7 +151,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Apple Health")
                     } footer: {
-                        Text("Blood pressure, heart rate and weight are saved to the Health app. New, edited and deleted readings are updated automatically. Allow access in Health › Sharing › Apps › BP Companion.")
+                        Text("Write: blood pressure, heart rate and weight are saved to the Health app; new, edited and deleted readings are updated automatically. Import Weight: a weigh-in from another app (e.g. the YUNMAI scale app) is added to the closest blood pressure reading of the same day — once per weigh-in, never overwriting a weight already entered. Allow access in Health › Sharing › Apps › BP Companion.")
                     }
                 }
 
@@ -284,6 +306,22 @@ struct SettingsView: View {
                 healthResult = "Could not connect to Health. Check that the HealthKit capability is enabled in Xcode › Signing & Capabilities."
                 healthEnabled = false
             }
+        }
+    }
+
+    /// Today only, or every day that has readings ("Import Past Weights").
+    private func importWeights(pastToo: Bool) {
+        Task {
+            try? await health.requestAuthorization()
+            let cal = Calendar.current
+            let end = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: .now))!
+            let start = pastToo
+                ? cal.startOfDay(for: readings.first?.date ?? .now)
+                : cal.startOfDay(for: .now)
+            let n = await health.importWeights(from: start, to: end, context: context)
+            weightResult = n == 0
+                ? "No new weight found in Health\(pastToo ? "" : " for today")."
+                : "Weight added to \(n) reading\(n == 1 ? "" : "s") from Health."
         }
     }
 

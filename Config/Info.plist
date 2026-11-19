@@ -20,7 +20,7 @@
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>BP Companion saves your blood pressure, heart rate and weight readings to the Health app.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>BP Companion only writes your readings to the Health app; it does not read other health data.</string>
+	<string>BP Companion reads your body weight (for example from the YUNMAI scale app) to add it to your blood pressure readings. It does not read other health data.</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<false/>
 	<key>UIBackgroundModes</key>
