@@ -160,6 +160,8 @@ struct PeriodSelector: View {
     @Binding var period: ReportPeriod
     @Binding var filter: TimeFilter
     @Binding var showCustom: Bool
+    /// The All / AM / PM menu (hidden in the Body tab).
+    var showsFilter = true
 
     var body: some View {
         HStack {
@@ -184,7 +186,8 @@ struct PeriodSelector: View {
 
             Spacer()
 
-            Menu {
+            if showsFilter {
+                Menu {
                 Picker("Time of day", selection: $filter) {
                     ForEach(TimeFilter.allCases) { Text($0.rawValue).tag($0) }
                 }
@@ -195,6 +198,7 @@ struct PeriodSelector: View {
                 }
                 .font(.subheadline)
                 .foregroundStyle(Theme.label)
+            }
             }
         }
         .padding(.horizontal, 10)
