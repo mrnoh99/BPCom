@@ -19,7 +19,7 @@ struct HomeView: View {
                     SectionTitle("YOUR LAST READINGS")
                     lastReading
 
-                    Text("Developed by Jaisung NOH MD 2026")
+                    Text(AppInfo.credit)
                         .font(.caption2)
                         .foregroundStyle(Theme.secondaryText.opacity(0.7))
                         .frame(maxWidth: .infinity)
