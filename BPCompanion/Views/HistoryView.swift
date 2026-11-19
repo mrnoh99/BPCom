@@ -89,7 +89,9 @@ struct HistoryView: View {
                                 .listRowSeparatorTint(Theme.gridLine)
                         }
                         .onDelete { offsets in
-                            for i in offsets { context.delete(section.readings[i]) }
+                            let doomed = offsets.map { section.readings[$0] }
+                            HealthSync.shared.remove(ids: doomed.map(\.id))
+                            for r in doomed { context.delete(r) }
                         }
                     }
                 } header: {

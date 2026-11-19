@@ -11,7 +11,7 @@
 | **Home** | 제목 *BP companion of Jaisung NOH*. `LAST 10 READINGS` (SYSTOLIC / DIASTOLIC / HR / MAP / WEIGHT 의 MAX·MIN·AVG), `YOUR LAST READINGS`. 우상단 **+** 로 입력 |
 | **History** | 월별 섹션(접기/펼치기), 날짜 아이콘, 수축기/이완기(단계별 색상), 맥박, MAP, 시간, 체중, 약 복용(💊) 표시. 연필 버튼 = 편집/삭제 모드, 행을 누르면 수정 |
 | **Reports** | 좌우 스와이프로 4페이지: **Summary**(MAX/MIN/AVG 표) · **Trend**(BP/HR/Weight 꺾은선 + 평균 점선) · **Range**(구간별 횟수·비율) · **Statistics**(Max/Avg/Min 막대). 상단 From/To 와 ‹ › 로 기간 이동, 하단 **D / W / M / Y / Custom**, **All / AM / PM** 필터, 📷 버튼 = 현재 페이지 이미지로 공유 |
-| **Settings** | 1. **Export (CSV)** 2. **Import (CSV)** 3. **iCloud Sync** 켜기/끄기, 이름 변경 |
+| **Settings** | 1. **Export (CSV)** 2. **Import (CSV)** (아래 Info 는 평소 접힘, 가져오기/내보내기 후 결과와 함께 펼쳐짐) 3. **iCloud Sync** 4. **Apple Health** 쓰기, 이름 변경 |
 | **+ Add Entry** | Basic(혈압/맥박 휠 ↔ 날짜·시간 휠, Drug 스위치) · Weight(저울 눈금 + kg 휠) · Note(메모 + ★) |
 
 혈압 색상 기준: 수축기 <90 저혈압(파랑) · 90–119 정상(초록) · 120–139 주의(주황) · ≥140 고혈압(빨강) / 이완기 <60 · 60–79 · 80–89 · ≥90.
@@ -31,6 +31,16 @@ MAP = 이완기 + (수축기 − 이완기) / 3.
 
 iCloud 설정이 없거나 iCloud에 로그인되어 있지 않으면 앱은 자동으로 기기 내 저장소만 사용합니다.
 Settings 의 iCloud Sync 스위치 변경은 앱을 다시 실행해야 적용됩니다.
+
+## Apple 건강(Health) 앱 연동
+
+- **Settings › Apple Health › Write to Health** 를 켜면 권한을 요청한 뒤 기존 기록 전체를 건강 앱에 저장합니다.
+  - 혈압(수축기/이완기), 심박수, 체중을 기록 시각 그대로 저장합니다. (약 복용·메모는 건강 앱에 해당 항목이 없어 저장하지 않습니다.)
+- 켜 둔 동안 새로 추가·수정·삭제·가져오기 한 기록은 건강 앱에도 자동 반영됩니다.
+  다른 기기에서 iCloud로 넘어온 기록은 **Send All Readings to Health** 로 보낼 수 있습니다(중복되지 않음 — 기록마다 고유 동기화 ID 사용).
+- 앱은 건강 앱에 **쓰기만** 하고 다른 건강 데이터는 읽지 않습니다.
+- 건강 앱이 없는 Mac(Designed for iPad)에서는 이 항목이 보이지 않습니다.
+- Xcode: Signing & Capabilities 에 **HealthKit** 이 표시되는지 확인하세요(entitlements 에 이미 포함). 없으면 + Capability › HealthKit 추가.
 
 ## iCloud 동기화
 

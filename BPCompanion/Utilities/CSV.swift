@@ -246,16 +246,20 @@ enum CSVImporter {
         let existingReadings = try context.fetch(FetchDescriptor<Reading>())
         var existing = Set(existingReadings.map { key($0.date, $0.systolic, $0.diastolic, $0.pulse) })
         var added = 0, duplicates = 0
+        var inserted: [Reading] = []
         for r in rows {
             let k = key(r.date, r.systolic, r.diastolic, r.pulse)
             if existing.contains(k) { duplicates += 1; continue }
             existing.insert(k)
-            context.insert(Reading(date: r.date, systolic: r.systolic, diastolic: r.diastolic,
-                                   pulse: r.pulse, weight: r.weight, drug: r.drug,
-                                   note: r.note, starred: r.starred))
+            let reading = Reading(date: r.date, systolic: r.systolic, diastolic: r.diastolic,
+                                  pulse: r.pulse, weight: r.weight, drug: r.drug,
+                                  note: r.note, starred: r.starred)
+            context.insert(reading)
+            inserted.append(reading)
             added += 1
         }
         try context.save()
+        HealthSync.shared.upsert(inserted)
 
         var parts = ["Imported \(added) readings."]
         if duplicates > 0 { parts.append("\(duplicates) duplicates skipped.") }

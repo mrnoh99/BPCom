@@ -88,7 +88,10 @@ struct AddEntryView: View {
             .tint(.white)
             .confirmationDialog("Delete this reading?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) {
-                    if let editing { context.delete(editing) }
+                    if let editing {
+                        HealthSync.shared.remove(ids: [editing.id])
+                        context.delete(editing)
+                    }
                     dismiss()
                 }
             }
@@ -359,11 +362,15 @@ struct AddEntryView: View {
             r.drug = drug
             r.note = note
             r.starred = starred
+            try? context.save()
+            HealthSync.shared.upsert([r])
         } else {
-            context.insert(Reading(date: date, systolic: s, diastolic: d, pulse: p,
-                                   weight: w, drug: drug, note: note, starred: starred))
+            let r = Reading(date: date, systolic: s, diastolic: d, pulse: p,
+                            weight: w, drug: drug, note: note, starred: starred)
+            context.insert(r)
+            try? context.save()
+            HealthSync.shared.upsert([r])
         }
-        try? context.save()
         dismiss()
     }
 }

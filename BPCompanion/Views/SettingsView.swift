@@ -15,7 +15,14 @@ struct SettingsView: View {
     @State private var exportDoc: CSVDocument?
     @State private var showExporter = false
     @State private var showImporter = false
-    @State private var message: String?
+    /// Info under Export/Import: collapsed whenever Settings opens, expanded after an import/export.
+    @State private var dataInfoExpanded = false
+    @State private var dataResult: String?
+    @State private var dataResultIsError = false
+
+    @AppStorage(SettingsKey.healthEnabled) private var healthEnabled = false
+    @StateObject private var health = HealthSync.shared
+    @State private var healthResult: String?
 
     @EnvironmentObject private var sync: CloudSyncMonitor
 
@@ -45,10 +52,60 @@ struct SettingsView: View {
                     } label: {
                         Label("Import (CSV)", systemImage: "square.and.arrow.down")
                     }
+
+                    DisclosureGroup(isExpanded: $dataInfoExpanded) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            if let dataResult {
+                                Text(dataResult)
+                                    .font(.subheadline)
+                                    .foregroundStyle(dataResultIsError ? Theme.high : Theme.normal)
+                            }
+                            Text("\(readings.count) readings stored.")
+                                .font(.footnote)
+                            Text("CSV format: \"Date Time\",\"Period\",\"Systolic (mmHg)\",\"Diastolic (mmHg)\",\"MAP (mmHg)\",\"Heart Rate (bpm)\",\"Weight (kg)\",\"Drug\",\"Note\" — e.g. \"2026. 11. 19. 06:54\",\"Morning\",\"141\",\"95\",\"110\",\"66\",\"84.5\",\"YES\",\"\"")
+                                .font(.caption)
+                                .foregroundStyle(Theme.secondaryText)
+                        }
+                        .padding(.vertical, 4)
+                    } label: {
+                        Label("Info", systemImage: "info.circle")
+                            .foregroundStyle(Theme.secondaryText)
+                    }
                 } header: {
                     Text("Data")
-                } footer: {
-                    Text("\(readings.count) readings stored. CSV format: \"Date Time\",\"Period\",\"Systolic (mmHg)\",\"Diastolic (mmHg)\",\"MAP (mmHg)\",\"Heart Rate (bpm)\",\"Weight (kg)\",\"Drug\",\"Note\" — e.g. \"2026. 11. 19. 06:54\",\"Morning\",\"141\",\"95\",\"110\",\"66\",\"84.5\",\"YES\",\"\"")
+                }
+
+                if health.isAvailable {
+                    Section {
+                        Toggle(isOn: $healthEnabled) {
+                            Label("Write to Health", systemImage: "heart.text.square")
+                        }
+                        .tint(Theme.orange)
+                        .onChange(of: healthEnabled) { _, on in
+                            if on { connectHealth() }
+                        }
+                        if healthEnabled {
+                            Button {
+                                sendAllToHealth()
+                            } label: {
+                                HStack {
+                                    Label("Send All Readings to Health", systemImage: "arrow.up.heart")
+                                    Spacer()
+                                    if health.busy { ProgressView() }
+                                }
+                            }
+                            .disabled(readings.isEmpty || health.busy)
+                        }
+                        if let healthResult {
+                            Text(healthResult)
+                                .font(.footnote)
+                                .foregroundStyle(Theme.secondaryText)
+                        }
+                    } header: {
+                        Text("Apple Health")
+                    } footer: {
+                        Text("Blood pressure, heart rate and weight are saved to the Health app. New, edited and deleted readings are updated automatically. Allow access in Health › Sharing › Apps › BP Companion.")
+                    }
                 }
 
                 Section {
@@ -124,20 +181,22 @@ struct SettingsView: View {
                           document: exportDoc,
                           contentType: .commaSeparatedText,
                           defaultFilename: "BloodPressure_Data_\(Self.fileDate.string(from: .now))") { result in
-                if case .failure(let error) = result { message = error.localizedDescription }
-                else { message = "Exported \(readings.count) readings." }
+                switch result {
+                case .success: showDataResult("Exported \(readings.count) readings.")
+                case .failure(let error): showDataResult("Export failed: \(error.localizedDescription)", error: true)
+                }
             }
             .fileImporter(isPresented: $showImporter,
                           allowedContentTypes: [.commaSeparatedText, .plainText, .text]) { result in
                 switch result {
                 case .success(let url): importCSV(url)
-                case .failure(let error): message = error.localizedDescription
+                case .failure(let error): showDataResult("Import failed: \(error.localizedDescription)", error: true)
                 }
             }
-            .alert("BP Companion", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
-                Button("OK") { message = nil }
-            } message: {
-                Text(message ?? "")
+            // Opening Settings again starts with the info collapsed.
+            .onDisappear {
+                dataInfoExpanded = false
+                dataResult = nil
             }
         }
     }
@@ -171,9 +230,47 @@ struct SettingsView: View {
 
     private func importCSV(_ url: URL) {
         do {
-            message = try CSVImporter.importFile(at: url, into: context)
+            showDataResult(try CSVImporter.importFile(at: url, into: context))
         } catch {
-            message = "Import failed: \(error.localizedDescription)"
+            showDataResult("Import failed: \(error.localizedDescription)", error: true)
+        }
+    }
+
+    private func showDataResult(_ text: String, error: Bool = false) {
+        dataResult = text
+        dataResultIsError = error
+        withAnimation { dataInfoExpanded = true }
+    }
+
+    // MARK: Apple Health
+
+    /// Turned on: ask for permission, then copy all existing readings to Health.
+    private func connectHealth() {
+        Task {
+            do {
+                try await health.requestAuthorization()
+                guard health.isAuthorized else {
+                    healthResult = "Health access was not allowed. Turn it on in Health › Sharing › Apps › BP Companion."
+                    return
+                }
+                let n = try await health.sendAll(readings)
+                healthResult = "Connected. \(n) readings saved to Health."
+            } catch {
+                healthResult = "Health: \(error.localizedDescription)"
+                healthEnabled = false
+            }
+        }
+    }
+
+    private func sendAllToHealth() {
+        Task {
+            do {
+                if !health.isAuthorized { try await health.requestAuthorization() }
+                let n = try await health.sendAll(readings)
+                healthResult = "\(n) readings saved to Health."
+            } catch {
+                healthResult = "Health: \(error.localizedDescription)"
+            }
         }
     }
 
