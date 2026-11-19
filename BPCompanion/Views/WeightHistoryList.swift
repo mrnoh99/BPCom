@@ -13,6 +13,7 @@ struct WeightHistoryList: View {
         let date: Date
         let source: String
         var weight: Double?
+        var weightEstimated = false
         var bmi: Double?
         var bodyFat: Double?
         var leanMass: Double?
@@ -36,7 +37,7 @@ struct WeightHistoryList: View {
                 let key = "\(s.source)|\(minute)"
                 var item = byKey[key] ?? Measurement(id: key, date: s.date, source: s.source)
                 switch m {
-                case .weight: item.weight = s.value
+                case .weight: item.weight = s.value; item.weightEstimated = s.estimated
                 case .bmi: item.bmi = s.value
                 case .bodyFat: item.bodyFat = s.value
                 case .leanMass: item.leanMass = s.value
@@ -156,7 +157,7 @@ private struct WeightRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    (Text(m.weight.map { Fmt.weight($0) } ?? "–").font(.title3)
+                    (Text(m.weight.map { (m.weightEstimated ? "≈" : "") + Fmt.weight($0) } ?? "–").font(.title3)
                      + Text(" kg").font(.subheadline))
                         .foregroundColor(Theme.weightLine)
                     if let c = m.change, abs(c) >= 0.05 {
@@ -201,18 +202,41 @@ private struct WeightRow: View {
     }
 }
 
-/// Shown when weight is missing but other body data arrives (Weight read access is off).
+/// Shown when Weight can't be read but other body data arrives: weights are estimated
+/// until read access to Weight is allowed.
 struct WeightAccessHint: View {
+    @State private var asking = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Label("Weight is not shared with BP Companion", systemImage: "exclamationmark.triangle.fill")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.elevated)
-            Text("BMI and body fat arrive, but Weight does not — read access to Weight is off. Turn it on, then pull down to refresh:")
+            Text("Weights marked ≈ are estimated from lean mass and body fat (lean ÷ (1 − fat%)). Tap below to allow reading Weight.")
                 .font(.footnote)
                 .foregroundStyle(Theme.primaryText)
-            Text("iPhone: Health app › Sharing › Apps › BP Companion › Weight\niPad: Settings › Health › Data Access & Devices › BP Companion › Weight")
-                .font(.footnote)
+            Button {
+                asking = true
+                Task {
+                    try? await HealthSync.shared.requestWeightRead()
+                    await BodyStore.shared.refresh()
+                    asking = false
+                }
+            } label: {
+                HStack {
+                    Label("Allow Weight Access", systemImage: "heart.text.square")
+                    if asking { ProgressView().padding(.leading, 4) }
+                }
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Theme.orange, in: Capsule())
+                .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+            .disabled(asking)
+            Text("If no permission sheet appears: iPhone — Health app › Sharing › Apps › BP Companion › Weight; iPad — Settings › Health › Data Access & Devices › BP Companion › Weight.")
+                .font(.caption)
                 .foregroundStyle(Theme.secondaryText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -224,6 +224,18 @@ final class HealthSync: ObservableObject {
         return out
     }
 
+    /// Asks only for reading Weight. Shows the Health sheet when Weight read was never
+    /// requested (it then appears in Health › Sharing › Apps › BP Companion).
+    func requestWeightRead() async throws {
+        guard isAvailable else { throw HealthError.unavailable }
+        try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
+            store.requestAuthorization(toShare: nil, read: [HKQuantityType(.bodyMass)]) { _, error in
+                if let error { c.resume(throwing: error) } else { c.resume() }
+            }
+        }
+        accessChecked += 1
+    }
+
     /// Deletes every body-weight sample that BP Companion itself wrote to Health
     /// (older versions saved the weight typed in the app). Scale data such as YUNMAI's is
     /// not touched — an app can only delete its own samples. Returns the number deleted.

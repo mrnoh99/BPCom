@@ -119,7 +119,7 @@ struct BodyView: View {
         return VStack(alignment: .leading, spacing: 4) {
             Text(m.title).font(.caption).foregroundStyle(Theme.secondaryText)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(s.map { m.format($0.value) } ?? "–")
+                Text(s.map { ($0.estimated ? "≈" : "") + m.format($0.value) } ?? "–")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(m.color)
                     .monospacedDigit()
