@@ -24,8 +24,7 @@ struct BodyView: View {
                     unavailable("Body Data Is Off",
                                 "Turn on Settings › Apple Health › Read Body Data to see weight, BMI, body fat and lean mass from your scale app.")
                 } else if body_.loaded && body_.samples.values.allSatisfy({ $0.isEmpty }) && body_.heights.isEmpty {
-                    unavailable("No Body Data",
-                                "No weight or body composition found in Health. In the YUNMAI app, turn on Health sharing (Me › Connect to Health), then allow BP Companion to read it in Health › Sharing › Apps.")
+                    BodyEmptyState()
                 } else {
                     PeriodHeader(period: $period)
                     Theme.separator.frame(height: 4)
