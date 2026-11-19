@@ -3,6 +3,7 @@ import SwiftData
 
 struct RootView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.scenePhase) private var scenePhase
     @State private var tab = 0
     @State private var pendingImport: URL?
     @State private var showImportDialog = false
@@ -29,6 +30,9 @@ struct RootView: View {
         }
         .toolbarBackground(Theme.tabBar, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            if phase == .active { HealthSync.shared.autoConnectIfNeeded(context) }
+        }
         // A .csv opened from Files / Mail / KakaoTalk / share sheet ("Open in BP Companion")
         .onOpenURL { url in
             guard url.isFileURL else { return }

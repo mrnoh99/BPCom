@@ -11,6 +11,8 @@ struct BPCompanionApp: App {
     init() {
         let (container, cloudEnabled, setupError) = Self.makeContainer()
         self.container = container
+        // Health writing is on by default (the permission sheet is shown on first launch).
+        UserDefaults.standard.register(defaults: [SettingsKey.healthEnabled: true])
         CloudSyncMonitor.shared.configure(cloudEnabled: cloudEnabled, setupError: setupError)
 
         // Page dots on the Reports screen

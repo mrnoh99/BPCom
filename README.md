@@ -39,6 +39,10 @@ Settings 의 iCloud Sync 스위치 변경은 앱을 다시 실행해야 적용�
 - 켜 둔 동안 새로 추가·수정·삭제·가져오기 한 기록은 건강 앱에도 자동 반영됩니다.
   다른 기기에서 iCloud로 넘어온 기록은 **Send All Readings to Health** 로 보낼 수 있습니다(중복되지 않음 — 기록마다 고유 동기화 ID 사용).
 - 앱은 건강 앱에 **쓰기만** 하고 다른 건강 데이터는 읽지 않습니다.
+- 기본으로 켜져 있어 **iPhone/iPad에서 처음 실행할 때 건강 권한 창**이 뜹니다. 권한을 한 번 요청해야
+  건강 앱 › 공유 › 앱 및 각 항목의 **데이터 소스**에 BP Companion 이 나타납니다.
+- Settings › Apple Health › Health Access 에서 상태(Allowed / Not allowed / Not asked yet)와 오류를 볼 수 있습니다.
+  "Missing com.apple.developer.healthkit entitlement" 오류가 보이면 Xcode › Signing & Capabilities 에 HealthKit 을 추가하고 다시 설치하세요.
 - 건강 앱이 없는 Mac(Designed for iPad)에서는 이 항목이 보이지 않습니다.
 - Xcode: Signing & Capabilities 에 **HealthKit** 이 표시되는지 확인하세요(entitlements 에 이미 포함). 없으면 + Capability › HealthKit 추가.
 

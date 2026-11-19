@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import SwiftData
 
 /// Writes readings to the Apple Health app:
 /// blood pressure (systolic/diastolic correlation), heart rate and body weight.
@@ -17,6 +18,24 @@ final class HealthSync: ObservableObject {
     private let store = HKHealthStore()
 
     @Published private(set) var busy = false
+    /// Last error from writing to Health (shown in Settings).
+    @Published private(set) var lastError: String?
+    /// Bumped after an authorization request so views re-read `access`.
+    @Published private(set) var accessChecked = 0
+
+    private var didAutoConnect = false
+    private static let initialSyncDoneKey = "healthInitialSyncDone"
+
+    enum Access { case unavailable, notAsked, allowed, denied }
+
+    var access: Access {
+        guard isAvailable else { return .unavailable }
+        switch store.authorizationStatus(for: HKQuantityType(.bloodPressureSystolic)) {
+        case .notDetermined: return .notAsked
+        case .sharingAuthorized: return .allowed
+        default: return .denied
+        }
+    }
 
     /// Health data is unavailable on Mac ("Designed for iPad") and some iPads.
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
@@ -41,9 +60,35 @@ final class HealthSync: ObservableObject {
     func requestAuthorization() async throws {
         guard isAvailable else { throw HealthError.unavailable }
         let types = Set<HKSampleType>(quantityTypes)
-        try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
-            store.requestAuthorization(toShare: types, read: nil) { _, error in
-                if let error { c.resume(throwing: error) } else { c.resume() }
+        defer { accessChecked += 1 }
+        do {
+            try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
+                store.requestAuthorization(toShare: types, read: nil) { _, error in
+                    if let error { c.resume(throwing: error) } else { c.resume() }
+                }
+            }
+        } catch {
+            // Typically "Missing com.apple.developer.healthkit entitlement" when the
+            // HealthKit capability is not enabled for the signing team / App ID.
+            lastError = error.localizedDescription
+            throw error
+        }
+    }
+
+    /// Called when the app becomes active. The first time, it shows the Health permission
+    /// sheet (that is what makes "BP Companion" appear in Health › Sharing › Apps /
+    /// Data Sources) and then copies all existing readings to Health once.
+    func autoConnectIfNeeded(_ context: ModelContext) {
+        guard isEnabled, !didAutoConnect else { return }
+        didAutoConnect = true
+        Task {
+            if access == .notAsked { try? await requestAuthorization() }
+            guard access == .allowed,
+                  !UserDefaults.standard.bool(forKey: Self.initialSyncDoneKey) else { return }
+            let readings = (try? context.fetch(FetchDescriptor<Reading>())) ?? []
+            guard !readings.isEmpty else { return }   // wait until there is data (e.g. from iCloud)
+            if (try? await sendAll(readings)) != nil {
+                UserDefaults.standard.set(true, forKey: Self.initialSyncDoneKey)
             }
         }
     }
@@ -73,7 +118,10 @@ final class HealthSync: ObservableObject {
     func upsert(_ readings: [Reading]) {
         guard isEnabled, !readings.isEmpty else { return }
         let snaps = readings.map(Snapshot.init)
-        Task { try? await write(snaps) }
+        Task {
+            do { try await write(snaps); lastError = nil }
+            catch { lastError = error.localizedDescription }
+        }
     }
 
     /// Removes deleted readings from Health (no-op when not enabled).
@@ -89,12 +137,18 @@ final class HealthSync: ObservableObject {
         guard isAvailable else { throw HealthError.unavailable }
         let snaps = readings.map(Snapshot.init)
         busy = true
+        lastError = nil
         defer { busy = false }
         // Write in chunks so very large histories don't hit a single huge transaction.
         var start = 0
         while start < snaps.count {
             let end = min(start + 200, snaps.count)
-            try await write(Array(snaps[start..<end]))
+            do {
+                try await write(Array(snaps[start..<end]))
+            } catch {
+                lastError = error.localizedDescription
+                throw error
+            }
             start = end
         }
         return snaps.count

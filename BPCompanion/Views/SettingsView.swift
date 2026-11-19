@@ -20,8 +20,9 @@ struct SettingsView: View {
     @State private var dataResult: String?
     @State private var dataResultIsError = false
 
-    @AppStorage(SettingsKey.healthEnabled) private var healthEnabled = false
+    @AppStorage(SettingsKey.healthEnabled) private var healthEnabled = true
     @StateObject private var health = HealthSync.shared
+    @Environment(\.openURL) private var openURL
     @State private var healthResult: String?
 
     @EnvironmentObject private var sync: CloudSyncMonitor
@@ -96,10 +97,34 @@ struct SettingsView: View {
                             }
                             .disabled(readings.isEmpty || health.busy)
                         }
+                        HStack {
+                            Text("Health Access")
+                            Spacer()
+                            Text(healthAccessText)
+                                .foregroundStyle(health.access == .allowed ? Theme.normal : Theme.secondaryText)
+                        }
+                        .id(health.accessChecked)
+                        if healthEnabled && health.access != .allowed {
+                            Button {
+                                if health.access == .notAsked {
+                                    connectHealth()
+                                } else if let url = URL(string: "x-apple-health://") {
+                                    openURL(url)
+                                }
+                            } label: {
+                                Label(health.access == .notAsked ? "Allow Health Access" : "Open Health App",
+                                      systemImage: "heart")
+                            }
+                        }
                         if let healthResult {
                             Text(healthResult)
                                 .font(.footnote)
                                 .foregroundStyle(Theme.secondaryText)
+                        }
+                        if let error = health.lastError {
+                            Text(error)
+                                .font(.footnote)
+                                .foregroundStyle(Theme.high)
                         }
                     } header: {
                         Text("Apple Health")
@@ -256,9 +281,18 @@ struct SettingsView: View {
                 let n = try await health.sendAll(readings)
                 healthResult = "Connected. \(n) readings saved to Health."
             } catch {
-                healthResult = "Health: \(error.localizedDescription)"
+                healthResult = "Could not connect to Health. Check that the HealthKit capability is enabled in Xcode › Signing & Capabilities."
                 healthEnabled = false
             }
+        }
+    }
+
+    private var healthAccessText: String {
+        switch health.access {
+        case .unavailable: return "Not available"
+        case .notAsked: return "Not asked yet"
+        case .allowed: return "Allowed"
+        case .denied: return "Not allowed"
         }
     }
 
