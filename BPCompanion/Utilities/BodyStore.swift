@@ -60,6 +60,8 @@ final class BodyStore: ObservableObject {
         let date: Date
         let value: Double
         let source: String
+        /// Weight worked out from lean mass and body fat (Weight itself not readable).
+        var estimated = false
     }
 
     static let readTypes: Set<HKObjectType> =
@@ -91,10 +93,10 @@ final class BodyStore: ObservableObject {
 
     /// BMI / fat / lean arrive but no weight at all: Health returns nothing (no error)
     /// when read access to Weight is off, so this is almost always that permission.
-    var weightAccessLikelyOff: Bool {
-        (samples[.weight] ?? []).isEmpty &&
-        [Metric.bmi, .bodyFat, .leanMass].contains { !(samples[$0] ?? []).isEmpty }
-    }
+    var weightAccessLikelyOff: Bool { weightEstimated }
+
+    /// True when no weight could be read and the weights shown are estimates.
+    @Published private(set) var weightEstimated = false
 
     func latestHeight(source: String? = nil) -> Sample? {
         heights.last { source == nil || $0.source == source }
@@ -113,6 +115,16 @@ final class BodyStore: ObservableObject {
         var result: [Metric: [Sample]] = [:]
         for m in Metric.allCases {
             result[m] = await load(m.type) { m.value(of: $0) }
+        }
+        let realWeights = result[.weight] ?? []
+        let hasOtherBody = [Metric.bmi, .bodyFat, .leanMass].contains { !(result[$0] ?? []).isEmpty }
+        if realWeights.isEmpty && hasOtherBody {
+            // Health returns nothing when Weight read access is off. YUNMAI writes lean mass
+            // and body fat at the same moment, so weight = lean ÷ (1 − fat%).
+            result[.weight] = Self.estimatedWeights(lean: result[.leanMass] ?? [], fat: result[.bodyFat] ?? [])
+            weightEstimated = true
+        } else {
+            weightEstimated = false
         }
         samples = result
         heights = await load(HKQuantityType(.height)) { $0.doubleValue(for: .meterUnit(with: .centi)) }
@@ -143,6 +155,17 @@ final class BodyStore: ObservableObject {
             }
             store.execute(q)
             observers.append(q)
+        }
+    }
+
+    /// Weight from lean body mass and body fat % measured at the same minute by the same app.
+    static func estimatedWeights(lean: [Sample], fat: [Sample]) -> [Sample] {
+        func key(_ s: Sample) -> String { "\(s.source)|\(Int(s.date.timeIntervalSince1970 / 60))" }
+        let fatByKey = Dictionary(fat.map { (key($0), $0.value) }, uniquingKeysWith: { a, _ in a })
+        return lean.compactMap { l in
+            guard let f = fatByKey[key(l)], f > 0, f < 90 else { return nil }
+            let w = (l.value / (1 - f / 100) * 10).rounded() / 10
+            return Sample(id: UUID(), date: l.date, value: w, source: l.source, estimated: true)
         }
     }
 
