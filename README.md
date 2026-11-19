@@ -50,12 +50,20 @@ Settings 의 iCloud Sync 스위치 변경은 앱을 다시 실행해야 적용�
 
 ## CSV 형식
 
+기존 앱의 `BloodPressure_Data_YYYYMMDD.csv` 와 **같은 형식**으로 내보내고 가져옵니다.
+
 ```
-date,systolic,diastolic,pulse,weight,drug,note,starred
-2026-11-19 06:54,141,95,66,84.5,1,,0
+"Date Time","Period","Systolic (mmHg)","Diastolic (mmHg)","MAP (mmHg)","Heart Rate (bpm)","Weight (kg)","Drug","Note"
+"2026. 11. 19. 06:54","Morning","141","95","110","66","84.5","YES",""
+"2026. 11. 18. 21:12","Evening","149","91","110","70","84.5","YES",""
 ```
 
-가져오기 시 `date, systolic, diastolic` 열은 필수이며, 같은 시각·같은 값의 중복 기록은 건너뜁니다.
+- 모든 칸을 따옴표로 감싸고, 최신 기록이 맨 위, UTF-8, 파일 이름 `BloodPressure_Data_20261119.csv`
+- Period: Morning 04:00–11:59 · Day 12:00–17:59 · Evening 18:00–03:59
+- MAP = 이완기 + (수축기 − 이완기)/3 반올림, Drug = `YES`/`NO`, 체중이 없으면 빈칸
+- 가져오기: `Date Time`, `Systolic`, `Diastolic` 열은 필수. `Period`, `MAP` 은 다시 계산하므로 무시합니다.
+  같은 시각(분)·같은 혈압·맥박의 기록은 중복으로 보고 건너뜁니다. 이전 형식(`date,systolic,...`)도 읽을 수 있습니다.
+- ★(starred) 표시는 이 형식에 칸이 없어 내보내지 않습니다.
 
 ## 폴더 구조
 

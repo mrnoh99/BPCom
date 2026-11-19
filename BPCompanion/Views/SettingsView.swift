@@ -49,7 +49,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Data")
                 } footer: {
-                    Text("\(readings.count) readings stored. CSV columns: date (yyyy-MM-dd HH:mm), systolic, diastolic, pulse, weight, drug, note, starred.")
+                    Text("\(readings.count) readings stored. CSV format: \"Date Time\",\"Period\",\"Systolic (mmHg)\",\"Diastolic (mmHg)\",\"MAP (mmHg)\",\"Heart Rate (bpm)\",\"Weight (kg)\",\"Drug\",\"Note\" — e.g. \"2026. 11. 19. 06:54\",\"Morning\",\"141\",\"95\",\"110\",\"66\",\"84.5\",\"YES\",\"\"")
                 }
 
                 Section {
@@ -127,7 +127,7 @@ struct SettingsView: View {
             .fileExporter(isPresented: $showExporter,
                           document: exportDoc,
                           contentType: .commaSeparatedText,
-                          defaultFilename: "BPCompanion-\(Date.now.formatted(.iso8601.year().month().day()))") { result in
+                          defaultFilename: "BloodPressure_Data_\(Self.fileDate.string(from: .now))") { result in
                 if case .failure(let error) = result { message = error.localizedDescription }
                 else { message = "Exported \(readings.count) readings." }
             }
@@ -154,6 +154,14 @@ struct SettingsView: View {
             }
         }
     }
+
+    /// yyyyMMdd for the export file name (BloodPressure_Data_20261119.csv)
+    private static let fileDate: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyyMMdd"
+        return f
+    }()
 
     private var statusText: String {
         if !launchICloudSync { return "Local only" }
@@ -184,14 +192,14 @@ struct SettingsView: View {
                 ?? String(decoding: data, as: UTF8.self)
             let (rows, skipped) = try CSV.parse(text)
 
-            // Skip rows that already exist (same minute + same values).
-            func key(_ d: Date, _ s: Int, _ dia: Int) -> String {
-                "\(Int(d.timeIntervalSince1970 / 60))-\(s)-\(dia)"
+            // Skip rows that already exist (same minute + same BP and pulse).
+            func key(_ d: Date, _ s: Int, _ dia: Int, _ p: Int) -> String {
+                "\(Int(d.timeIntervalSince1970 / 60))-\(s)-\(dia)-\(p)"
             }
-            var existing = Set(readings.map { key($0.date, $0.systolic, $0.diastolic) })
+            var existing = Set(readings.map { key($0.date, $0.systolic, $0.diastolic, $0.pulse) })
             var added = 0, duplicates = 0
             for r in rows {
-                let k = key(r.date, r.systolic, r.diastolic)
+                let k = key(r.date, r.systolic, r.diastolic, r.pulse)
                 if existing.contains(k) { duplicates += 1; continue }
                 existing.insert(k)
                 context.insert(Reading(date: r.date, systolic: r.systolic, diastolic: r.diastolic,
