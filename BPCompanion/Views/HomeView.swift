@@ -24,6 +24,7 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                 }
+                .readableWidth()
             }
             .background(Theme.background)
             .navigationBarTitleDisplayMode(.inline)

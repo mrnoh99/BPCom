@@ -19,7 +19,7 @@ MAP = 이완기 + (수축기 − 이완기) / 3.
 
 ## 빌드 방법
 
-요구사항: **Xcode 16 이상**, iOS 17 이상 기기/시뮬레이터.
+요구사항: **Xcode 16 이상**, iOS/iPadOS 17 이상 **iPhone · iPad** (유니버설 앱). iPhone은 세로 고정, iPad는 모든 방향 회전과 Split View/Slide Over를 지원하며 표와 목록은 넓은 화면에서 가운데 정렬됩니다.
 
 1. `BPCompanion.xcodeproj` 를 Xcode로 엽니다.
 2. Target **BPCompanion › Signing & Capabilities** 에서 **Team** 을 선택합니다.

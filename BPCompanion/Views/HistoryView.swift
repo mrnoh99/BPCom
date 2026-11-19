@@ -119,6 +119,7 @@ struct HistoryView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .readableWidth(900)
         .background(Theme.background)
     }
 }

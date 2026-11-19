@@ -115,6 +115,7 @@ struct SettingsView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .readableWidth(700)
             .background(Theme.background)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
