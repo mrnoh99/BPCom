@@ -58,10 +58,10 @@ struct SettingsView: View {
                     Button(role: .destructive) {
                         confirmDeleteAll = true
                     } label: {
-                        Label("Delete All Readings", systemImage: "trash")
-                            .foregroundStyle(readings.isEmpty ? Theme.secondaryText : Theme.high)
+                        Label("Delete All Weights", systemImage: "scalemass")
+                            .foregroundStyle(weightCount == 0 ? Theme.secondaryText : Theme.high)
                     }
-                    .disabled(readings.isEmpty)
+                    .disabled(weightCount == 0)
 
                     DisclosureGroup(isExpanded: $dataInfoExpanded) {
                         VStack(alignment: .leading, spacing: 8) {
@@ -227,14 +227,12 @@ struct SettingsView: View {
                 case .failure(let error): showDataResult("Import failed: \(error.localizedDescription)", error: true)
                 }
             }
-            .confirmationDialog("Delete all \(readings.count) readings?",
+            .confirmationDialog("Delete weight from \(weightCount) readings?",
                                 isPresented: $confirmDeleteAll, titleVisibility: .visible) {
-                Button("Delete All", role: .destructive) { deleteAll() }
+                Button("Delete All Weights", role: .destructive) { deleteAllWeights() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text(launchICloudSync
-                     ? "All blood pressure readings will be deleted from this device and your other iCloud devices. Export a CSV first if you want a backup. This cannot be undone."
-                     : "All blood pressure readings will be deleted. Export a CSV first if you want a backup. This cannot be undone.")
+                Text("Only the weight (kg) is removed. Blood pressure, heart rate, drug and notes are kept. Export a CSV first if you want a backup. This cannot be undone.")
             }
             // Opening Settings again starts with the info collapsed.
             .onDisappear {
@@ -279,13 +277,16 @@ struct SettingsView: View {
         }
     }
 
-    private func deleteAll() {
-        let n = readings.count
-        HealthSync.shared.remove(ids: readings.map(\.id))
-        for r in readings { context.delete(r) }
+    private var weightCount: Int { readings.filter { $0.weight != nil }.count }
+
+    /// Clears the weight of every reading; blood pressure and the rest stay.
+    private func deleteAllWeights() {
+        let changed = readings.filter { $0.weight != nil }
+        for r in changed { r.weight = nil }
         do {
             try context.save()
-            showDataResult("Deleted \(n) readings.")
+            HealthSync.shared.upsert(changed)   // rewrites them in Health without weight
+            showDataResult("Deleted weight from \(changed.count) readings.")
         } catch {
             showDataResult("Delete failed: \(error.localizedDescription)", error: true)
         }
