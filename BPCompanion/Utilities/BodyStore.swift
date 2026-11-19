@@ -76,13 +76,40 @@ final class BodyStore: ObservableObject {
     @Published private(set) var loaded = false
     @Published private(set) var loading = false
 
+    /// Everything read from Health, before the source filter.
+    private var raw: [Metric: [Sample]] = [:]
+    private var rawHeights: [Sample] = []
+    /// Every app that has written body data, including excluded ones (Settings list).
+    @Published private(set) var allSources: [String] = []
+
+    /// Apps whose body data is left out. Default: "BP" — the old blood-pressure app,
+    /// which saved a fixed weight with every reading; it is not scale data.
+    static let excludedSourcesKey = "bodyExcludedSources"
+    static let defaultExcludedSources = ["BP"]
+
+    var excludedSources: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: Self.excludedSourcesKey) ?? Self.defaultExcludedSources) }
+        set {
+            UserDefaults.standard.set(Array(newValue).sorted(), forKey: Self.excludedSourcesKey)
+            applyFilter()
+        }
+    }
+
+    func isIncluded(_ source: String) -> Bool { !excludedSources.contains(source) }
+
+    func setIncluded(_ source: String, _ on: Bool) {
+        var s = excludedSources
+        if on { s.remove(source) } else { s.insert(source) }
+        excludedSources = s
+    }
+
     private let store = HKHealthStore()
     private var observers: [HKObserverQuery] = []
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
     var isEnabled: Bool { isAvailable && UserDefaults.standard.bool(forKey: SettingsKey.healthReadBody) }
 
-    /// Every source app that has written body data (e.g. "YUNMAI").
+    /// Source apps currently shown (e.g. "YUNMAI").
     var sources: [String] {
         Array(Set(samples.values.flatMap { $0.map(\.source) } + heights.map(\.source))).sorted()
     }
@@ -112,23 +139,31 @@ final class BodyStore: ObservableObject {
         if !UserDefaults.standard.bool(forKey: Self.readRequestedKey) {
             try? await HealthSync.shared.requestAuthorization()
         }
-        var result: [Metric: [Sample]] = [:]
+        var loadedRaw: [Metric: [Sample]] = [:]
         for m in Metric.allCases {
-            result[m] = await load(m.type) { m.value(of: $0) }
+            loadedRaw[m] = await load(m.type) { m.value(of: $0) }
         }
-        let realWeights = result[.weight] ?? []
-        let hasOtherBody = [Metric.bmi, .bodyFat, .leanMass].contains { !(result[$0] ?? []).isEmpty }
-        if realWeights.isEmpty && hasOtherBody {
-            // Health returns nothing when Weight read access is off. YUNMAI writes lean mass
-            // and body fat at the same moment, so weight = lean ÷ (1 − fat%).
-            result[.weight] = Self.estimatedWeights(lean: result[.leanMass] ?? [], fat: result[.bodyFat] ?? [])
-            weightEstimated = true
-        } else {
-            weightEstimated = false
-        }
-        samples = result
-        heights = await load(HKQuantityType(.height)) { $0.doubleValue(for: .meterUnit(with: .centi)) }
+        raw = loadedRaw
+        rawHeights = await load(HKQuantityType(.height)) { $0.doubleValue(for: .meterUnit(with: .centi)) }
+        allSources = Array(Set(raw.values.flatMap { $0.map(\.source) } + rawHeights.map(\.source))).sorted()
+        applyFilter()
         startObservers()
+    }
+
+    /// Drops excluded apps (e.g. "BP"), then estimates weight if none can be read.
+    private func applyFilter() {
+        let excluded = excludedSources
+        var result = raw.mapValues { $0.filter { !excluded.contains($0.source) } }
+        // A weigh-in with lean mass and body fat but no readable weight (e.g. Weight read
+        // access off) gets weight = lean ÷ (1 − fat%), marked as estimated.
+        let realWeights = result[.weight] ?? []
+        let realKeys = Set(realWeights.map(Self.measurementKey))
+        let estimates = Self.estimatedWeights(lean: result[.leanMass] ?? [], fat: result[.bodyFat] ?? [])
+            .filter { !realKeys.contains(Self.measurementKey($0)) }
+        result[.weight] = (realWeights + estimates).sorted { $0.date < $1.date }
+        weightEstimated = realWeights.isEmpty && !estimates.isEmpty
+        samples = result
+        heights = rawHeights.filter { !excluded.contains($0.source) }
     }
 
     private func load(_ type: HKQuantityType, value: @escaping (HKQuantity) -> Double) async -> [Sample] {
@@ -159,11 +194,15 @@ final class BodyStore: ObservableObject {
     }
 
     /// Weight from lean body mass and body fat % measured at the same minute by the same app.
+    /// Values of one weigh-in share the source app and the minute.
+    static func measurementKey(_ s: Sample) -> String {
+        "\(s.source)|\(Int(s.date.timeIntervalSince1970 / 60))"
+    }
+
     static func estimatedWeights(lean: [Sample], fat: [Sample]) -> [Sample] {
-        func key(_ s: Sample) -> String { "\(s.source)|\(Int(s.date.timeIntervalSince1970 / 60))" }
-        let fatByKey = Dictionary(fat.map { (key($0), $0.value) }, uniquingKeysWith: { a, _ in a })
+        let fatByKey = Dictionary(fat.map { (measurementKey($0), $0.value) }, uniquingKeysWith: { a, _ in a })
         return lean.compactMap { l in
-            guard let f = fatByKey[key(l)], f > 0, f < 90 else { return nil }
+            guard let f = fatByKey[measurementKey(l)], f > 0, f < 90 else { return nil }
             let w = (l.value / (1 - f / 100) * 10).rounded() / 10
             return Sample(id: UUID(), date: l.date, value: w, source: l.source, estimated: true)
         }
@@ -179,12 +218,6 @@ final class BodyStore: ObservableObject {
         if s.metadata?[HealthSync.readingKey] != nil { return true }
         let ownName = (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String) ?? "BP Companion"
         return source.name == ownName || source.name.localizedCaseInsensitiveContains("BP Companion")
-    }
-
-    /// Clears what was loaded so the next refresh starts clean (after deleting samples).
-    func reset() {
-        samples = [:]
-        heights = []
     }
 
     // MARK: Analysis helpers

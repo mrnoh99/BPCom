@@ -25,7 +25,7 @@ struct SettingsView: View {
     @StateObject private var health = HealthSync.shared
     @Environment(\.openURL) private var openURL
     @State private var healthResult: String?
-    @State private var confirmDeleteOwnWeights = false
+    @ObservedObject private var bodyStore = BodyStore.shared
 
     @EnvironmentObject private var sync: CloudSyncMonitor
 
@@ -130,17 +130,18 @@ struct SettingsView: View {
                         .onChange(of: healthReadBody) { _, on in
                             if on { Task { try? await health.requestAuthorization(); await BodyStore.shared.refresh() } }
                         }
-                        Button(role: .destructive) {
-                            confirmDeleteOwnWeights = true
-                        } label: {
-                            Label("Delete BP Companion Weights in Health", systemImage: "trash")
-                        }
-                        .confirmationDialog("Delete weights that BP Companion saved to Health?",
-                                            isPresented: $confirmDeleteOwnWeights, titleVisibility: .visible) {
-                            Button("Delete", role: .destructive) { deleteOwnWeights() }
-                            Button("Cancel", role: .cancel) {}
-                        } message: {
-                            Text("Only weights written by BP Companion (older versions) are removed. Your YUNMAI scale data is not touched.")
+                        if healthReadBody && !bodyStore.allSources.isEmpty {
+                            DisclosureGroup("Body Data Sources") {
+                                ForEach(bodyStore.allSources, id: \.self) { name in
+                                    Toggle(name, isOn: Binding(
+                                        get: { bodyStore.isIncluded(name) },
+                                        set: { bodyStore.setIncluded(name, $0) }))
+                                    .tint(Theme.orange)
+                                }
+                                Text("Turn off apps that are not your scale. The old “BP” app is off by default: it saved the same weight with every blood pressure reading.")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.secondaryText)
+                            }
                         }
                         if let error = health.lastError {
                             Text(error)
@@ -304,21 +305,6 @@ struct SettingsView: View {
             } catch {
                 healthResult = "Could not connect to Health. Check that the HealthKit capability is enabled in Xcode › Signing & Capabilities."
                 healthEnabled = false
-            }
-        }
-    }
-
-    private func deleteOwnWeights() {
-        Task {
-            do {
-                let n = try await health.deleteOwnWeights()
-                BodyStore.shared.reset()
-                await BodyStore.shared.refresh()
-                healthResult = n == 0
-                    ? "No BP Companion weights were found in Health."
-                    : "Deleted \(n) weight record\(n == 1 ? "" : "s") that BP Companion had saved to Health."
-            } catch {
-                healthResult = "Could not delete: \(error.localizedDescription)"
             }
         }
     }

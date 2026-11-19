@@ -13,6 +13,7 @@ struct BPCompanionApp: App {
         self.container = container
         // Health writing is on by default (the permission sheet is shown on first launch).
         UserDefaults.standard.register(defaults: [SettingsKey.healthEnabled: true,
+                                                  BodyStore.excludedSourcesKey: BodyStore.defaultExcludedSources,
                                                   SettingsKey.healthReadBody: true])
         CloudSyncMonitor.shared.configure(cloudEnabled: cloudEnabled, setupError: setupError)
 

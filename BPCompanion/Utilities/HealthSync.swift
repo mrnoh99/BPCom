@@ -236,26 +236,6 @@ final class HealthSync: ObservableObject {
         accessChecked += 1
     }
 
-    /// Deletes every body-weight sample that BP Companion itself wrote to Health
-    /// (older versions saved the weight typed in the app). Scale data such as YUNMAI's is
-    /// not touched — an app can only delete its own samples. Returns the number deleted.
-    func deleteOwnWeights() async throws -> Int {
-        guard isAvailable else { throw HealthError.unavailable }
-        let type = HKQuantityType(.bodyMass)
-        // Deleting needs write permission for weight, asked only for this clean-up.
-        try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
-            store.requestAuthorization(toShare: [type], read: nil) { _, error in
-                if let error { c.resume(throwing: error) } else { c.resume() }
-            }
-        }
-        let predicate = HKQuery.predicateForObjects(from: HKSource.default())
-        return try await withCheckedThrowingContinuation { (c: CheckedContinuation<Int, Error>) in
-            store.deleteObjects(of: type, predicate: predicate) { _, count, error in
-                if let error { c.resume(throwing: error) } else { c.resume(returning: count) }
-            }
-        }
-    }
-
     enum HealthError: LocalizedError {
         case unavailable
         var errorDescription: String? { "Apple Health is not available on this device." }

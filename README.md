@@ -42,7 +42,7 @@ Settings 의 iCloud Sync 스위치 변경은 앱을 다시 실행해야 적용�
 - **체성분 읽기 (YUNMAI 등)**: Settings › Apple Health › **Read Body Data** (기본 켜짐). YUNMAI 앱이 건강 앱에 넣은 체중·BMI·체지방률·제지방량·신장을 읽어 **Body 탭**에서 혈압과 따로 분석합니다. 혈압 기록에 체중을 붙이거나 앱에서 체중을 입력하지 않습니다.
   - YUNMAI 앱에서 건강 앱 연동을 켜야 합니다(Me › Connect to Health).
   - 앱이 열려 있는 동안 새 측정값이 들어오면 자동으로 다시 읽습니다. Home의 "YOUR LAST READINGS"에는 최근 체중이 함께 표시됩니다.
-  - BP Companion이 직접 쓴 체중(예전 버전에서 저장한 것)은 읽을 때 제외합니다. Settings › Apple Health › **Delete BP Companion Weights in Health** 로 건강 앱에서도 지울 수 있습니다(YUNMAI 자료는 지워지지 않음).
+  - 예전 혈압 앱 **"BP"** 가 건강 앱에 넣은 체중(매 기록마다 같은 값)은 기본으로 제외합니다. Settings › Apple Health › **Body Data Sources** 에서 앱별로 켜고 끌 수 있습니다. (다른 앱이 쓴 건강 자료는 iOS 제한으로 이 앱에서 지울 수 없음 — 지우려면 건강 앱 › 체중 › 데이터 소스 및 접근 › BP › 데이터 삭제)
   - BMI 등급은 대한비만학회 기준(정상 18.5–22.9, 과체중 23–24.9, 비만 25 이상)입니다.
 - 기본으로 켜져 있어 **iPhone/iPad에서 처음 실행할 때 건강 권한 창**이 뜹니다. 권한을 한 번 요청해야
   건강 앱 › 공유 › 앱 및 각 항목의 **데이터 소스**에 BP Companion 이 나타납니다.
