@@ -24,7 +24,6 @@ struct SettingsView: View {
     @StateObject private var health = HealthSync.shared
     @Environment(\.openURL) private var openURL
     @State private var healthResult: String?
-    @State private var confirmDeleteAll = false
 
     @EnvironmentObject private var sync: CloudSyncMonitor
 
@@ -54,14 +53,6 @@ struct SettingsView: View {
                     } label: {
                         Label("Import (CSV)", systemImage: "square.and.arrow.down")
                     }
-
-                    Button(role: .destructive) {
-                        confirmDeleteAll = true
-                    } label: {
-                        Label("Delete All Weights", systemImage: "scalemass")
-                            .foregroundStyle(weightCount == 0 ? Theme.secondaryText : Theme.high)
-                    }
-                    .disabled(weightCount == 0)
 
                     DisclosureGroup(isExpanded: $dataInfoExpanded) {
                         VStack(alignment: .leading, spacing: 8) {
@@ -227,13 +218,6 @@ struct SettingsView: View {
                 case .failure(let error): showDataResult("Import failed: \(error.localizedDescription)", error: true)
                 }
             }
-            .confirmationDialog("Delete weight from \(weightCount) readings?",
-                                isPresented: $confirmDeleteAll, titleVisibility: .visible) {
-                Button("Delete All Weights", role: .destructive) { deleteAllWeights() }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Only the weight (kg) is removed. Blood pressure, heart rate, drug and notes are kept. Export a CSV first if you want a backup. This cannot be undone.")
-            }
             // Opening Settings again starts with the info collapsed.
             .onDisappear {
                 dataInfoExpanded = false
@@ -274,21 +258,6 @@ struct SettingsView: View {
             showDataResult(try CSVImporter.importFile(at: url, into: context))
         } catch {
             showDataResult("Import failed: \(error.localizedDescription)", error: true)
-        }
-    }
-
-    private var weightCount: Int { readings.filter { $0.weight != nil }.count }
-
-    /// Clears the weight of every reading; blood pressure and the rest stay.
-    private func deleteAllWeights() {
-        let changed = readings.filter { $0.weight != nil }
-        for r in changed { r.weight = nil }
-        do {
-            try context.save()
-            HealthSync.shared.upsert(changed)   // rewrites them in Health without weight
-            showDataResult("Deleted weight from \(changed.count) readings.")
-        } catch {
-            showDataResult("Delete failed: \(error.localizedDescription)", error: true)
         }
     }
 
