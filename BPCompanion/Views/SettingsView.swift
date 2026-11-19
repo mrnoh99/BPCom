@@ -24,6 +24,7 @@ struct SettingsView: View {
     @StateObject private var health = HealthSync.shared
     @Environment(\.openURL) private var openURL
     @State private var healthResult: String?
+    @State private var confirmDeleteAll = false
 
     @EnvironmentObject private var sync: CloudSyncMonitor
 
@@ -53,6 +54,14 @@ struct SettingsView: View {
                     } label: {
                         Label("Import (CSV)", systemImage: "square.and.arrow.down")
                     }
+
+                    Button(role: .destructive) {
+                        confirmDeleteAll = true
+                    } label: {
+                        Label("Delete All Readings", systemImage: "trash")
+                            .foregroundStyle(readings.isEmpty ? Theme.secondaryText : Theme.high)
+                    }
+                    .disabled(readings.isEmpty)
 
                     DisclosureGroup(isExpanded: $dataInfoExpanded) {
                         VStack(alignment: .leading, spacing: 8) {
@@ -218,6 +227,15 @@ struct SettingsView: View {
                 case .failure(let error): showDataResult("Import failed: \(error.localizedDescription)", error: true)
                 }
             }
+            .confirmationDialog("Delete all \(readings.count) readings?",
+                                isPresented: $confirmDeleteAll, titleVisibility: .visible) {
+                Button("Delete All", role: .destructive) { deleteAll() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(launchICloudSync
+                     ? "All blood pressure readings will be deleted from this device and your other iCloud devices. Export a CSV first if you want a backup. This cannot be undone."
+                     : "All blood pressure readings will be deleted. Export a CSV first if you want a backup. This cannot be undone.")
+            }
             // Opening Settings again starts with the info collapsed.
             .onDisappear {
                 dataInfoExpanded = false
@@ -258,6 +276,18 @@ struct SettingsView: View {
             showDataResult(try CSVImporter.importFile(at: url, into: context))
         } catch {
             showDataResult("Import failed: \(error.localizedDescription)", error: true)
+        }
+    }
+
+    private func deleteAll() {
+        let n = readings.count
+        HealthSync.shared.remove(ids: readings.map(\.id))
+        for r in readings { context.delete(r) }
+        do {
+            try context.save()
+            showDataResult("Deleted \(n) readings.")
+        } catch {
+            showDataResult("Delete failed: \(error.localizedDescription)", error: true)
         }
     }
 
