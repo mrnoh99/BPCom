@@ -65,6 +65,11 @@ Settings 의 iCloud Sync 스위치 변경은 앱을 다시 실행해야 적용�
   같은 시각(분)·같은 혈압·맥박의 기록은 중복으로 보고 건너뜁니다. 이전 형식(`date,systolic,...`)도 읽을 수 있습니다.
 - ★(starred) 표시는 이 형식에 칸이 없어 내보내지 않습니다.
 
+### 가져오는 방법
+1. **Settings › Import (CSV)** 에서 파일 선택
+2. 또는 Files·메일·카카오톡 등에서 `.csv` 파일을 탭/공유 → **BP Companion** 선택 → "Import" 확인
+   (가져온 뒤 History 탭으로 이동). UTF-8, UTF-16, CP949(한글 Excel) 인코딩을 읽을 수 있습니다.
+
 ## 폴더 구조
 
 ```

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
+import SwiftData
 
 /// CSV import / export of readings.
 ///
@@ -214,5 +215,51 @@ struct CSVDocument: FileDocument {
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         FileWrapper(regularFileWithContents: Data(text.utf8))
+    }
+}
+
+/// Imports a CSV file (BloodPressure_Data format or the older format) into the store.
+/// Used by Settings › Import and by opening a .csv file with the app (Files, Mail, share sheet).
+enum CSVImporter {
+    /// Returns a user-facing summary, e.g. "Imported 485 readings."
+    @MainActor
+    static func importFile(at url: URL, into context: ModelContext) throws -> String {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+        let data = try Data(contentsOf: url)
+        let text: String
+        if data.starts(with: [0xFF, 0xFE]) || data.starts(with: [0xFE, 0xFF]),
+           let utf16 = String(data: data, encoding: .utf16) {
+            text = utf16                                                  // Excel "Unicode text"
+        } else {
+            text = String(data: data, encoding: .utf8)
+                ?? String(data: data, encoding: .init(rawValue: 0x80000422)) // CP949/EUC-KR (Korean Excel)
+                ?? String(decoding: data, as: UTF8.self)
+        }
+        let (rows, skipped) = try CSV.parse(text)
+
+        // Skip rows that already exist (same minute + same BP and pulse).
+        func key(_ d: Date, _ s: Int, _ dia: Int, _ p: Int) -> String {
+            "\(Int(d.timeIntervalSince1970 / 60))-\(s)-\(dia)-\(p)"
+        }
+        let existingReadings = try context.fetch(FetchDescriptor<Reading>())
+        var existing = Set(existingReadings.map { key($0.date, $0.systolic, $0.diastolic, $0.pulse) })
+        var added = 0, duplicates = 0
+        for r in rows {
+            let k = key(r.date, r.systolic, r.diastolic, r.pulse)
+            if existing.contains(k) { duplicates += 1; continue }
+            existing.insert(k)
+            context.insert(Reading(date: r.date, systolic: r.systolic, diastolic: r.diastolic,
+                                   pulse: r.pulse, weight: r.weight, drug: r.drug,
+                                   note: r.note, starred: r.starred))
+            added += 1
+        }
+        try context.save()
+
+        var parts = ["Imported \(added) readings."]
+        if duplicates > 0 { parts.append("\(duplicates) duplicates skipped.") }
+        if skipped > 0 { parts.append("\(skipped) unreadable rows skipped.") }
+        return parts.joined(separator: " ")
     }
 }

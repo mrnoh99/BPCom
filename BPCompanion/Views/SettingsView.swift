@@ -183,35 +183,8 @@ struct SettingsView: View {
     }
 
     private func importCSV(_ url: URL) {
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         do {
-            let data = try Data(contentsOf: url)
-            let text = String(data: data, encoding: .utf8)
-                ?? String(data: data, encoding: .utf16)
-                ?? String(decoding: data, as: UTF8.self)
-            let (rows, skipped) = try CSV.parse(text)
-
-            // Skip rows that already exist (same minute + same BP and pulse).
-            func key(_ d: Date, _ s: Int, _ dia: Int, _ p: Int) -> String {
-                "\(Int(d.timeIntervalSince1970 / 60))-\(s)-\(dia)-\(p)"
-            }
-            var existing = Set(readings.map { key($0.date, $0.systolic, $0.diastolic, $0.pulse) })
-            var added = 0, duplicates = 0
-            for r in rows {
-                let k = key(r.date, r.systolic, r.diastolic, r.pulse)
-                if existing.contains(k) { duplicates += 1; continue }
-                existing.insert(k)
-                context.insert(Reading(date: r.date, systolic: r.systolic, diastolic: r.diastolic,
-                                       pulse: r.pulse, weight: r.weight, drug: r.drug,
-                                       note: r.note, starred: r.starred))
-                added += 1
-            }
-            try context.save()
-            var parts = ["Imported \(added) readings."]
-            if duplicates > 0 { parts.append("\(duplicates) duplicates skipped.") }
-            if skipped > 0 { parts.append("\(skipped) unreadable rows skipped.") }
-            message = parts.joined(separator: " ")
+            message = try CSVImporter.importFile(at: url, into: context)
         } catch {
             message = "Import failed: \(error.localizedDescription)"
         }
