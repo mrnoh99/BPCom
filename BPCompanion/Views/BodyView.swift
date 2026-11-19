@@ -8,7 +8,6 @@ struct BodyView: View {
     @AppStorage(SettingsKey.healthReadBody) private var readBody = true
 
     @State private var period = ReportPeriod(kind: .month)
-    @State private var filter: TimeFilter = .all
     @State private var showCustom = false
     @State private var metric: BodyStore.Metric = .weight
     @State private var source: String?        // nil = all apps
@@ -43,7 +42,7 @@ struct BodyView: View {
                         .readableWidth()
                     }
                     Theme.separator.frame(height: 4)
-                    PeriodSelector(period: $period, filter: $filter, showCustom: $showCustom)
+                    PeriodSelector(period: $period, filter: .constant(.all), showCustom: $showCustom, showsFilter: false)
                 }
             }
             .background(Theme.background)
@@ -67,7 +66,7 @@ struct BodyView: View {
 
     private func inPeriod(_ m: Metric) -> [BodyStore.Sample] {
         (body_.samples[m] ?? []).filter {
-            period.contains($0.date) && filter.includes($0.date) && (source == nil || $0.source == source)
+            period.contains($0.date) && (source == nil || $0.source == source)
         }
     }
 
