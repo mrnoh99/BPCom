@@ -81,8 +81,7 @@ struct WeightHistoryList: View {
             } else if !readBody {
                 empty("Body Data Is Off", "Turn on Settings › Apple Health › Read Body Data.")
             } else if bodyStore.loaded && measurements.isEmpty {
-                empty("No Weight History",
-                      "No weigh-ins found in Health. In the YUNMAI app turn on Health sharing, then allow BP Companion to read it in Health › Sharing › Apps.")
+                BodyEmptyState()
             } else {
                 list
             }
@@ -243,5 +242,63 @@ struct WeightAccessHint: View {
         .padding(12)
         .background(Theme.cell, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.elevated.opacity(0.6), lineWidth: 1))
+    }
+}
+
+/// Empty Body / Weight screen that says *why* nothing is shown:
+/// data found but every app is turned off in Body Data Sources, or nothing readable
+/// (read access off on this device, or Health on this device has no data yet).
+struct BodyEmptyState: View {
+    @ObservedObject private var bodyStore = BodyStore.shared
+    @State private var asking = false
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "scalemass")
+                .font(.system(size: 44))
+                .foregroundStyle(Theme.secondaryText)
+            if !bodyStore.allSources.isEmpty {
+                Text("All Body Data Is Turned Off").font(.title3.bold())
+                Text("Found in Health from: \(bodyStore.allSources.joined(separator: ", ")). These apps are turned off in Body Data Sources.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Theme.secondaryText)
+                ForEach(bodyStore.allSources, id: \.self) { name in
+                    Button("Turn On \(name)") { bodyStore.setIncluded(name, true) }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Theme.orange)
+                }
+            } else {
+                Text("No Body Data Readable").font(.title3.bold())
+                Text("BP Companion can't read weight, BMI or body fat on this device. Read access is set separately on each device, and iPad gets YUNMAI data from iPhone through iCloud (Settings › [your name] › iCloud › Health on both).")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Theme.secondaryText)
+                Button {
+                    asking = true
+                    Task {
+                        try? await HealthSync.shared.requestAuthorization()
+                        try? await HealthSync.shared.requestWeightRead()
+                        await bodyStore.refresh()
+                        asking = false
+                    }
+                } label: {
+                    HStack {
+                        Text("Allow Health Access")
+                        if asking { ProgressView() }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.orange)
+                .disabled(asking)
+                Text("If no sheet appears — iPhone: Health app › Sharing › Apps › BP Companion. iPad: Settings › Health › Data Access & Devices › BP Companion. Turn on Weight, BMI, Body Fat, Lean Body Mass and Height.")
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Theme.secondaryText)
+            }
+            Button("Reload") { Task { await bodyStore.refresh() } }
+                .foregroundStyle(Theme.label)
+        }
+        .padding(24)
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
