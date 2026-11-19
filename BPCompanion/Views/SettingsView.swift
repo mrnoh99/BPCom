@@ -15,7 +15,6 @@ struct SettingsView: View {
     @State private var exportDoc: CSVDocument?
     @State private var showExporter = false
     @State private var showImporter = false
-    @State private var confirmDeleteAll = false
     @State private var message: String?
 
     @EnvironmentObject private var sync: CloudSyncMonitor
@@ -92,17 +91,13 @@ struct SettingsView: View {
                          : "Readings are synced through your private iCloud database to every iPhone/iPad signed in with the same Apple ID. Changes usually appear on other devices within a minute while the app is open.")
                 }
 
+                #if DEBUG
                 Section {
-                    Button(role: .destructive) { confirmDeleteAll = true } label: {
-                        Label("Delete All Readings", systemImage: "trash")
-                    }
-                    .disabled(readings.isEmpty)
-                    #if DEBUG
                     Button { addSampleData() } label: {
                         Label("Add Sample Data (debug)", systemImage: "wand.and.stars")
                     }
-                    #endif
                 }
+                #endif
 
                 Section {
                     HStack {
@@ -137,15 +132,6 @@ struct SettingsView: View {
                 case .success(let url): importCSV(url)
                 case .failure(let error): message = error.localizedDescription
                 }
-            }
-            .confirmationDialog("Delete all \(readings.count) readings?",
-                                isPresented: $confirmDeleteAll, titleVisibility: .visible) {
-                Button("Delete All", role: .destructive) {
-                    for r in readings { context.delete(r) }
-                    try? context.save()
-                }
-            } message: {
-                Text(iCloudSync ? "They will also be removed from your other devices." : "This cannot be undone.")
             }
             .alert("BP Companion", isPresented: Binding(get: { message != nil }, set: { if !$0 { message = nil } })) {
                 Button("OK") { message = nil }
