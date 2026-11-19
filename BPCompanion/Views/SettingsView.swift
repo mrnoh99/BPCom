@@ -212,7 +212,7 @@ struct SettingsView: View {
                 } header: {
                     Text("About")
                 } footer: {
-                    Text("Developed by Jaisung NOH MD 2026")
+                    Text(AppInfo.credit)
                         .font(.caption2)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 8)

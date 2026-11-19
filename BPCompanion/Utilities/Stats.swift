@@ -46,3 +46,15 @@ enum Fmt {
     }()
     static func month(_ d: Date) -> String { d.formatted(.dateTime.year().month(.wide)) }
 }
+
+enum AppInfo {
+    /// "1.0 (8)" — marketing version and build number from the bundle.
+    static var version: String {
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "\(v) (\(b))"
+    }
+
+    /// "Developed by Jaisung NOH MD 2026 · Version 1.0 (8)"
+    static var credit: String { "Developed by Jaisung NOH MD 2026 · Version \(version)" }
+}
