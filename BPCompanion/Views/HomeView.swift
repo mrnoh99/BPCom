@@ -5,6 +5,7 @@ struct HomeView: View {
     @Query(sort: \Reading.date, order: .reverse) private var readings: [Reading]
     @AppStorage(SettingsKey.ownerName) private var ownerName = SettingsKey.defaultOwnerName
     @State private var showAdd = false
+    @ObservedObject private var bodyStore = BodyStore.shared
 
     var body: some View {
         NavigationStack {
@@ -62,7 +63,10 @@ struct HomeView: View {
                 lastRow("SYSTOLIC/DIASTOLIC:", "\(r.systolic)/\(r.diastolic) mmHg")
                 lastRow("HEART RATE:", "\(r.pulse) bpm")
                 lastRow("MAP:", "\(Fmt.int(r.map)) mmHg")
-                lastRow("WEIGHT:", r.weight.map { "\(Fmt.weight($0)) kg" } ?? "–")
+                if let w = bodyStore.latest(.weight) {
+                    // From Apple Health (e.g. the YUNMAI scale), independent of BP readings.
+                    lastRow("WEIGHT:", "\(Fmt.weight(w.value)) kg · \(w.date.formatted(.dateTime.month().day()))")
+                }
                 lastRow("DATE:", Fmt.dateTime(r.date))
             }
             .background(Theme.gridLine)

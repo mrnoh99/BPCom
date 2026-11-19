@@ -3,7 +3,8 @@ import HealthKit
 import SwiftData
 
 /// Writes readings to the Apple Health app:
-/// blood pressure (systolic/diastolic correlation), heart rate and body weight.
+/// blood pressure (systolic/diastolic correlation) and heart rate.
+/// (Body weight is not written: it comes from the scale app and is read by `BodyStore`.)
 ///
 /// Every sample carries `HKMetadataKeySyncIdentifier` derived from the reading's UUID,
 /// so writing the same reading again (an edit, "Send All", or another device that
@@ -15,7 +16,7 @@ final class HealthSync: ObservableObject {
     /// Custom metadata key holding the reading's UUID (used to delete a reading's samples).
     static let readingKey = "BPCompanionReadingID"
 
-    private let store = HKHealthStore()
+    let store = HKHealthStore()
 
     @Published private(set) var busy = false
     /// Last error from writing to Health (shown in Settings).
@@ -47,7 +48,7 @@ final class HealthSync: ObservableObject {
 
     private var quantityTypes: [HKQuantityType] {
         [HKQuantityType(.bloodPressureSystolic), HKQuantityType(.bloodPressureDiastolic),
-         HKQuantityType(.heartRate), HKQuantityType(.bodyMass)]
+         HKQuantityType(.heartRate)]
     }
 
     /// True when the user allowed writing blood pressure in the Health permission sheet.
@@ -59,14 +60,21 @@ final class HealthSync: ObservableObject {
 
     func requestAuthorization() async throws {
         guard isAvailable else { throw HealthError.unavailable }
-        let types = Set<HKSampleType>(quantityTypes)
+        // Write: BP and heart rate (when "Write to Health" is on).
+        // Read: weight, BMI, body fat, lean mass (when "Read Body Data" is on) — e.g. YUNMAI.
+        let share: Set<HKSampleType> = UserDefaults.standard.bool(forKey: SettingsKey.healthEnabled)
+            ? Set(quantityTypes) : []
+        let read: Set<HKObjectType> = UserDefaults.standard.bool(forKey: SettingsKey.healthReadBody)
+            ? BodyStore.readTypes : []
+        guard !share.isEmpty || !read.isEmpty else { return }
         defer { accessChecked += 1 }
         do {
             try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
-                store.requestAuthorization(toShare: types, read: nil) { _, error in
+                store.requestAuthorization(toShare: share, read: read) { _, error in
                     if let error { c.resume(throwing: error) } else { c.resume() }
                 }
             }
+            if !read.isEmpty { UserDefaults.standard.set(true, forKey: BodyStore.readRequestedKey) }
         } catch {
             // Typically "Missing com.apple.developer.healthkit entitlement" when the
             // HealthKit capability is not enabled for the signing team / App ID.
@@ -78,19 +86,24 @@ final class HealthSync: ObservableObject {
     /// Called when the app becomes active. The first time, it shows the Health permission
     /// sheet (that is what makes "BP Companion" appear in Health › Sharing › Apps /
     /// Data Sources) and then copies all existing readings to Health once.
-    func autoConnectIfNeeded(_ context: ModelContext) {
+    func autoConnectIfNeeded(_ context: ModelContext) async {
         guard isEnabled, !didAutoConnect else { return }
         didAutoConnect = true
-        Task {
-            if access == .notAsked { try? await requestAuthorization() }
-            guard access == .allowed,
-                  !UserDefaults.standard.bool(forKey: Self.initialSyncDoneKey) else { return }
-            let readings = (try? context.fetch(FetchDescriptor<Reading>())) ?? []
-            guard !readings.isEmpty else { return }   // wait until there is data (e.g. from iCloud)
-            if (try? await sendAll(readings)) != nil {
-                UserDefaults.standard.set(true, forKey: Self.initialSyncDoneKey)
-            }
+        if access == .notAsked { try? await requestAuthorization() }
+        guard access == .allowed,
+              !UserDefaults.standard.bool(forKey: Self.initialSyncDoneKey) else { return }
+        let readings = (try? context.fetch(FetchDescriptor<Reading>())) ?? []
+        guard !readings.isEmpty else { return }   // wait until there is data (e.g. from iCloud)
+        if (try? await sendAll(readings)) != nil {
+            UserDefaults.standard.set(true, forKey: Self.initialSyncDoneKey)
         }
+    }
+
+    /// App became active: permission (first time, write + body read together) → copy
+    /// readings → load body data. One after another, so the permission sheet shows once.
+    func onBecameActive(_ context: ModelContext) async {
+        await autoConnectIfNeeded(context)
+        await BodyStore.shared.refresh()
     }
 
     // MARK: Writing
@@ -102,7 +115,6 @@ final class HealthSync: ObservableObject {
         let systolic: Int
         let diastolic: Int
         let pulse: Int
-        let weight: Double?
 
         init(_ r: Reading) {
             id = r.id.uuidString
@@ -110,7 +122,6 @@ final class HealthSync: ObservableObject {
             systolic = r.systolic
             diastolic = r.diastolic
             pulse = r.pulse
-            weight = r.weight
         }
     }
 
@@ -155,7 +166,7 @@ final class HealthSync: ObservableObject {
     }
 
     private func write(_ snaps: [Snapshot]) async throws {
-        // Remove old samples first so a cleared weight / pulse doesn't linger after an edit.
+        // Remove old samples first so a cleared pulse doesn't linger after an edit.
         try? await delete(snaps.map(\.id))
 
         let version = Int(Date().timeIntervalSince1970)
@@ -209,11 +220,6 @@ final class HealthSync: ObservableObject {
                                         quantity: HKQuantity(unit: .count().unitDivided(by: .minute()),
                                                              doubleValue: Double(s.pulse)),
                                         start: s.date, end: s.date, metadata: meta("hr")))
-        }
-        if let w = s.weight {
-            out.append(HKQuantitySample(type: HKQuantityType(.bodyMass),
-                                        quantity: HKQuantity(unit: .gramUnit(with: .kilo), doubleValue: w),
-                                        start: s.date, end: s.date, metadata: meta("kg")))
         }
         return out
     }

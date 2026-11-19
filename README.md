@@ -9,10 +9,11 @@
 | 탭 | 내용 |
 |---|---|
 | **Home** | 제목 *BP companion of Jaisung NOH*. `LAST 10 READINGS` (SYSTOLIC / DIASTOLIC / HR / MAP / WEIGHT 의 MAX·MIN·AVG), `YOUR LAST READINGS`. 우상단 **+** 로 입력 |
-| **History** | 월별 섹션(접기/펼치기), 날짜 아이콘, 수축기/이완기(단계별 색상), 맥박, MAP, 시간, 체중, 약 복용(💊) 표시. 연필 버튼 = 편집/삭제 모드, 행을 누르면 수정 |
-| **Reports** | 좌우 스와이프로 4페이지: **Summary**(MAX/MIN/AVG 표) · **Trend**(BP/HR/Weight 꺾은선 + 평균 점선) · **Range**(구간별 횟수·비율) · **Statistics**(Max/Avg/Min 막대). 상단 From/To 와 ‹ › 로 기간 이동, 하단 **D / W / M / Y / Custom**, **All / AM / PM** 필터, 📷 버튼 = 현재 페이지 이미지로 공유 |
+| **History** | 월별 섹션(접기/펼치기), 날짜 아이콘, 수축기/이완기(단계별 색상), 맥박, MAP, 시간, 약 복용(💊) 표시. 연필 버튼 = 편집/삭제 모드, 행을 누르면 수정 |
+| **Reports** | 좌우 스와이프로 4페이지: **Summary**(MAX/MIN/AVG 표) · **Trend**(BP/HR 꺾은선 + 평균 점선) · **Range**(구간별 횟수·비율) · **Statistics**(Max/Avg/Min 막대). 상단 From/To 와 ‹ › 로 기간 이동, 하단 **D / W / M / Y / Custom**, **All / AM / PM** 필터, 📷 버튼 = 현재 페이지 이미지로 공유 |
 | **Settings** | 1. **Export (CSV)** 2. **Import (CSV)** (아래 Info 는 평소 접힘, 가져오기/내보내기 후 결과와 함께 펼쳐짐) 3. **iCloud Sync** 4. **Apple Health** 쓰기, 이름 변경 |
-| **+ Add Entry** | Basic(혈압/맥박 휠 ↔ 날짜·시간 휠, Drug 스위치) · Weight(저울 눈금 + kg 휠, 새 기록은 기본 "입력 안 함" — 휠을 돌리면 입력) · Note(메모 + ★) |
+| **Body** | 건강 앱에서 체중계 앱(YUNMAI 등)의 **체중·BMI·체지방률·제지방량**을 읽어 혈압과 별도로 분석: 최근값 카드(BMI 등급), 기간별 MAX/MIN/AVG/변화 표, 항목별 추이 그래프(평균선), 변화 분석(체지방 감소·제지방 유지 등). 기간·AM/PM 선택, 앱별 출처 필터, 당겨서 새로고침 |
+| **+ Add Entry** | Basic(혈압/맥박 휠 ↔ 날짜·시간 휠, Drug 스위치) · Note(메모 + ★). 체중은 입력하지 않음 → Body 탭 |
 
 혈압 색상 기준: 수축기 <90 저혈압(파랑) · 90–119 정상(초록) · 120–139 주의(주황) · ≥140 고혈압(빨강) / 이완기 <60 · 60–79 · 80–89 · ≥90.
 MAP = 이완기 + (수축기 − 이완기) / 3.
@@ -35,10 +36,13 @@ Settings 의 iCloud Sync 스위치 변경은 앱을 다시 실행해야 적용�
 ## Apple 건강(Health) 앱 연동
 
 - **Settings › Apple Health › Write to Health** 를 켜면 권한을 요청한 뒤 기존 기록 전체를 건강 앱에 저장합니다.
-  - 혈압(수축기/이완기), 심박수, 체중을 기록 시각 그대로 저장합니다. (약 복용·메모는 건강 앱에 해당 항목이 없어 저장하지 않습니다.)
+  - 혈압(수축기/이완기)과 심박수를 기록 시각 그대로 저장합니다(체중은 쓰지 않음). (약 복용·메모는 건강 앱에 해당 항목이 없어 저장하지 않습니다.)
 - 켜 둔 동안 새로 추가·수정·삭제·가져오기 한 기록은 건강 앱에도 자동 반영됩니다.
   다른 기기에서 iCloud로 넘어온 기록은 **Send All Readings to Health** 로 보낼 수 있습니다(중복되지 않음 — 기록마다 고유 동기화 ID 사용).
-- 앱은 건강 앱에 **쓰기만** 하고 다른 건강 데이터는 읽지 않습니다.
+- **체성분 읽기 (YUNMAI 등)**: Settings › Apple Health › **Read Body Data** (기본 켜짐). YUNMAI 앱이 건강 앱에 넣은 체중·BMI·체지방률·제지방량을 읽어 **Body 탭**에서 혈압과 따로 분석합니다. 혈압 기록에 체중을 붙이거나 앱에서 체중을 입력하지 않습니다.
+  - YUNMAI 앱에서 건강 앱 연동을 켜야 합니다(Me › Connect to Health).
+  - 앱이 열려 있는 동안 새 측정값이 들어오면 자동으로 다시 읽습니다. Home의 "YOUR LAST READINGS"에는 최근 체중이 함께 표시됩니다.
+  - BMI 등급은 대한비만학회 기준(정상 18.5–22.9, 과체중 23–24.9, 비만 25 이상)입니다.
 - 기본으로 켜져 있어 **iPhone/iPad에서 처음 실행할 때 건강 권한 창**이 뜹니다. 권한을 한 번 요청해야
   건강 앱 › 공유 › 앱 및 각 항목의 **데이터 소스**에 BP Companion 이 나타납니다.
 - Settings › Apple Health › Health Access 에서 상태(Allowed / Not allowed / Not asked yet)와 오류를 볼 수 있습니다.
@@ -74,7 +78,7 @@ Settings 의 iCloud Sync 스위치 변경은 앱을 다시 실행해야 적용�
 
 - 모든 칸을 따옴표로 감싸고, 최신 기록이 맨 위, UTF-8, 파일 이름 `BloodPressure_Data_20261119.csv`
 - Period: Morning 04:00–11:59 · Day 12:00–17:59 · Evening 18:00–03:59
-- MAP = 이완기 + (수축기 − 이완기)/3 반올림, Drug = `YES`/`NO`, 체중이 없으면 빈칸
+- MAP = 이완기 + (수축기 − 이완기)/3 반올림, Drug = `YES`/`NO`. Weight 칸은 형식 호환을 위해 남겨 두며, 가져온 CSV의 체중 값을 그대로 보관했다가 내보낼 때 다시 씁니다(앱 화면에는 표시하지 않음)
 - 가져오기: `Date Time`, `Systolic`, `Diastolic` 열은 필수. `Period`, `MAP` 은 다시 계산하므로 무시합니다.
   같은 시각(분)·같은 혈압·맥박의 기록은 중복으로 보고 건너뜁니다. 이전 형식(`date,systolic,...`)도 읽을 수 있습니다.
 - ★(starred) 표시는 이 형식에 칸이 없어 내보내지 않습니다.

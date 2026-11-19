@@ -1,7 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// "+" screen: Basic (BP / pulse / date), Weight and Note tabs.
+/// "+" screen: Basic (BP / pulse / date) and Note tabs.
+/// Body weight is not entered here — it comes from Apple Health (e.g. YUNMAI) in the Body tab.
 /// Also used to edit an existing reading from History.
 struct AddEntryView: View {
     @Environment(\.dismiss) private var dismiss
@@ -9,7 +10,7 @@ struct AddEntryView: View {
 
     private let editing: Reading?
 
-    private enum Tab: String, CaseIterable { case basic = "Basic", weight = "Weight", note = "Note" }
+    private enum Tab: String, CaseIterable { case basic = "Basic", note = "Note" }
     private enum BasicPicker { case values, date }
 
     @State private var tab: Tab = .basic
@@ -21,17 +22,13 @@ struct AddEntryView: View {
     @State private var date: Date
     @State private var drug: Bool
 
-    @State private var weightWhole: Int
-    @State private var weightTenth: Int
-    @State private var hasWeight: Bool
-
     @State private var note: String
     @State private var starred: Bool
     @State private var confirmDelete = false
     @FocusState private var noteFocused: Bool
 
     // Defaults when nothing was recorded before
-    private static let defaultSys = 120, defaultDia = 80, defaultPulse = 70, defaultWeight = 70.0
+    private static let defaultSys = 120, defaultDia = 80, defaultPulse = 70
 
     /// - Parameters:
     ///   - editing: reading to edit, or `nil` to add a new one.
@@ -44,14 +41,6 @@ struct AddEntryView: View {
         _pulse = State(initialValue: src?.pulse ?? Self.defaultPulse)
         _date = State(initialValue: editing?.date ?? .now)
         _drug = State(initialValue: src?.drug ?? false)
-
-        let w = src?.weight ?? Self.defaultWeight
-        let tenths = Int((w * 10).rounded())
-        _weightWhole = State(initialValue: tenths / 10)
-        _weightTenth = State(initialValue: tenths % 10)
-        // New entries start with no weight ("--.-"); turning the kg wheel sets one.
-        // The wheel still starts at the last weight for convenience. Edits keep their weight.
-        _hasWeight = State(initialValue: editing?.weight != nil)
 
         _note = State(initialValue: editing?.note ?? "")
         _starred = State(initialValue: editing?.starred ?? false)
@@ -66,7 +55,6 @@ struct AddEntryView: View {
                     VStack(spacing: 0) {
                         switch tab {
                         case .basic: basicTab
-                        case .weight: weightTab
                         case .note: noteTab
                         }
                     }
@@ -230,51 +218,6 @@ struct AddEntryView: View {
         }
     }
 
-    // MARK: Weight
-
-    private var weightTab: some View {
-        VStack(spacing: 0) {
-            card {
-                ZStack {
-                    ScaleDial(value: Double(weightWhole) + Double(weightTenth) / 10)
-                        .stroke(.white.opacity(0.35), lineWidth: 1.5)
-                        .frame(height: 70)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                    Rectangle()
-                        .fill(.white.opacity(0.35))
-                        .frame(width: 1.5)
-                    HStack {
-                        Spacer().frame(width: 24)
-                        Spacer()
-                        VStack(spacing: 14) {
-                            Text(hasWeight ? "\(weightWhole).\(weightTenth)" : "--.-")
-                                .font(.system(size: 30))
-                                .monospacedDigit()
-                            Text("kg").font(.subheadline)
-                        }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 12)
-                        .background(Theme.orangeDeep.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
-                        Spacer()
-                        clearButton { hasWeight = false }
-                    }
-                    .padding(.top, 50)
-                }
-                .frame(height: 200)
-            }
-
-            Spacer(minLength: 8)
-
-            wheelArea {
-                HStack(spacing: 0) {
-                    wheel(Binding(get: { weightWhole }, set: { weightWhole = $0; hasWeight = true }), 20...250)
-                    wheel(Binding(get: { weightTenth }, set: { weightTenth = $0; hasWeight = true }), 0...9, prefix: ".")
-                    unit("kg")
-                }
-            }
-        }
-    }
-
     // MARK: Note
 
     private var noteTab: some View {
@@ -354,13 +297,11 @@ struct AddEntryView: View {
     private func save() {
         guard let s = systolic, let d = diastolic else { return }
         let p = pulse ?? 0
-        let w: Double? = hasWeight ? Double(weightWhole) + Double(weightTenth) / 10 : nil
         if let r = editing {
             r.systolic = s
             r.diastolic = d
             r.pulse = p
             r.date = date
-            r.weight = w
             r.drug = drug
             r.note = note
             r.starred = starred
@@ -368,41 +309,11 @@ struct AddEntryView: View {
             HealthSync.shared.upsert([r])
         } else {
             let r = Reading(date: date, systolic: s, diastolic: d, pulse: p,
-                            weight: w, drug: drug, note: note, starred: starred)
+                            drug: drug, note: note, starred: starred)
             context.insert(r)
             try? context.save()
             HealthSync.shared.upsert([r])
         }
         dismiss()
-    }
-}
-
-/// Bathroom-scale style tick arc drawn at the top of the Weight card.
-/// The ticks scroll with the value so the dial "moves" as the wheel turns.
-struct ScaleDial: Shape {
-    var value: Double
-
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        let center = CGPoint(x: rect.midX, y: rect.maxY + rect.width * 0.9)
-        let radius = rect.width * 0.9 + rect.height * 0.55
-        let stepDeg = 1.6               // degrees per 0.5 kg
-        let offset = (value * 2).truncatingRemainder(dividingBy: 1) * stepDeg
-        let span = 34.0
-        var a = -span - offset
-        var i = Int((value * 2).rounded(.down)) - Int(span / stepDeg)
-        while a <= span {
-            let rad = (a - 90) * .pi / 180
-            let long = i % 10 == 0
-            let mid = i % 2 == 0
-            let len = long ? rect.height * 0.55 : (mid ? rect.height * 0.35 : rect.height * 0.22)
-            let outer = CGPoint(x: center.x + cos(rad) * radius, y: center.y + sin(rad) * radius)
-            let inner = CGPoint(x: center.x + cos(rad) * (radius - len), y: center.y + sin(rad) * (radius - len))
-            p.move(to: outer)
-            p.addLine(to: inner)
-            a += stepDeg
-            i += 1
-        }
-        return p
     }
 }

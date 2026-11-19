@@ -12,7 +12,8 @@ struct BPCompanionApp: App {
         let (container, cloudEnabled, setupError) = Self.makeContainer()
         self.container = container
         // Health writing is on by default (the permission sheet is shown on first launch).
-        UserDefaults.standard.register(defaults: [SettingsKey.healthEnabled: true])
+        UserDefaults.standard.register(defaults: [SettingsKey.healthEnabled: true,
+                                                  SettingsKey.healthReadBody: true])
         CloudSyncMonitor.shared.configure(cloudEnabled: cloudEnabled, setupError: setupError)
 
         // Page dots on the Reports screen
@@ -68,6 +69,7 @@ struct BPCompanionApp: App {
 enum SettingsKey {
     static let iCloudSync = "iCloudSyncEnabled"
     static let healthEnabled = "healthEnabled"
+    static let healthReadBody = "healthReadBody"
     static let ownerName = "ownerName"
     static let defaultOwnerName = "Jaisung NOH"
 }

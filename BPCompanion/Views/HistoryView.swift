@@ -151,11 +151,6 @@ struct HistoryRow: View {
 
             VStack(alignment: .trailing, spacing: 4) {
                 Text(Fmt.time(reading.date))
-                if let w = reading.weight {
-                    Text("\(Fmt.weight(w)) kg")
-                } else {
-                    Text(" ")
-                }
                 HStack(spacing: 4) {
                     if reading.starred {
                         Image(systemName: "star.fill").foregroundStyle(Theme.elevated)

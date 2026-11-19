@@ -21,6 +21,7 @@ struct SettingsView: View {
     @State private var dataResultIsError = false
 
     @AppStorage(SettingsKey.healthEnabled) private var healthEnabled = true
+    @AppStorage(SettingsKey.healthReadBody) private var healthReadBody = true
     @StateObject private var health = HealthSync.shared
     @Environment(\.openURL) private var openURL
     @State private var healthResult: String?
@@ -121,6 +122,13 @@ struct SettingsView: View {
                                 .font(.footnote)
                                 .foregroundStyle(Theme.secondaryText)
                         }
+                        Toggle(isOn: $healthReadBody) {
+                            Label("Read Body Data (YUNMAI etc.)", systemImage: "scalemass")
+                        }
+                        .tint(Theme.orange)
+                        .onChange(of: healthReadBody) { _, on in
+                            if on { Task { try? await health.requestAuthorization(); await BodyStore.shared.refresh() } }
+                        }
                         if let error = health.lastError {
                             Text(error)
                                 .font(.footnote)
@@ -129,7 +137,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Apple Health")
                     } footer: {
-                        Text("Blood pressure, heart rate and weight are saved to the Health app. New, edited and deleted readings are updated automatically. Allow access in Health › Sharing › Apps › BP Companion.")
+                        Text("Write: blood pressure and heart rate are saved to the Health app; new, edited and deleted readings are updated automatically. Read Body Data: weight, BMI, body fat and lean body mass from your scale app (e.g. YUNMAI) are shown and analysed in the Body tab. Allow access in Health › Sharing › Apps › BP Companion.")
                     }
                 }
 
@@ -320,7 +328,6 @@ struct SettingsView: View {
                                        systolic: Int.random(in: 125...165),
                                        diastolic: Int.random(in: 80...102),
                                        pulse: Int.random(in: 58...78),
-                                       weight: 84 + Double(Int.random(in: 0...10)) / 10,
                                        drug: hour == 7))
             }
         }

@@ -12,7 +12,8 @@ final class Reading {
     var systolic: Int = 120
     var diastolic: Int = 80
     var pulse: Int = 70
-    /// Body weight in kg. `nil` when no weight was recorded with this reading.
+    /// Legacy: body weight in kg kept only for the CSV "Weight (kg)" column.
+    /// Not entered or shown in the app — body data comes from Apple Health (Body tab).
     var weight: Double?
     var drug: Bool = false
     var note: String = ""

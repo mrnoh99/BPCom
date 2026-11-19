@@ -23,6 +23,10 @@ struct RootView: View {
                 .noTopScrollBlur()
                 .tabItem { Label("Reports", systemImage: "chart.line.uptrend.xyaxis") }
                 .tag(2)
+            BodyView()
+                .noTopScrollBlur()
+                .tabItem { Label("Body", systemImage: "figure") }
+                .tag(4)
             SettingsView()
                 .noTopScrollBlur()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
@@ -31,7 +35,9 @@ struct RootView: View {
         .toolbarBackground(Theme.tabBar, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
         .onChange(of: scenePhase, initial: true) { _, phase in
-            if phase == .active { HealthSync.shared.autoConnectIfNeeded(context) }
+            if phase == .active {
+                Task { await HealthSync.shared.onBecameActive(context) }
+            }
         }
         // A .csv opened from Files / Mail / KakaoTalk / share sheet ("Open in BP Companion")
         .onOpenURL { url in

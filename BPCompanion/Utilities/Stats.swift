@@ -20,7 +20,6 @@ struct ReadingStats {
     let diastolic: Aggregate?
     let pulse: Aggregate?
     let map: Aggregate?
-    let weight: Aggregate?
 
     init(_ readings: [Reading]) {
         count = readings.count
@@ -28,7 +27,6 @@ struct ReadingStats {
         diastolic = Aggregate(readings.map { Double($0.diastolic) })
         pulse = Aggregate(readings.map { Double($0.pulse) })
         map = Aggregate(readings.map { $0.map })
-        weight = Aggregate(readings.compactMap { $0.weight })
     }
 }
 
