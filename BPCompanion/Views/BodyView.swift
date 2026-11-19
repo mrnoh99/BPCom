@@ -31,6 +31,9 @@ struct BodyView: View {
                     Theme.separator.frame(height: 4)
                     ScrollView {
                         VStack(spacing: 0) {
+                            if body_.weightAccessLikelyOff {
+                                WeightAccessHint().padding([.horizontal, .top], 12)
+                            }
                             latestCard
                             Theme.separator.frame(height: 4)
                             summaryTable

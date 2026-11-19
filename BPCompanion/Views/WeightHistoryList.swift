@@ -91,6 +91,12 @@ struct WeightHistoryList: View {
 
     private var list: some View {
         List {
+            if bodyStore.weightAccessLikelyOff {
+                WeightAccessHint()
+                    .listRowBackground(Theme.background)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
+                    .listRowSeparator(.hidden)
+            }
             ForEach(sections) { section in
                 Section {
                     if !collapsed.contains(section.id) {
@@ -192,5 +198,26 @@ private struct WeightRow: View {
              + Text(String(format: "%.1f", v) + unit))
                 .font(.subheadline)
         }
+    }
+}
+
+/// Shown when weight is missing but other body data arrives (Weight read access is off).
+struct WeightAccessHint: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Weight is not shared with BP Companion", systemImage: "exclamationmark.triangle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.elevated)
+            Text("BMI and body fat arrive, but Weight does not — read access to Weight is off. Turn it on, then pull down to refresh:")
+                .font(.footnote)
+                .foregroundStyle(Theme.primaryText)
+            Text("iPhone: Health app › Sharing › Apps › BP Companion › Weight\niPad: Settings › Health › Data Access & Devices › BP Companion › Weight")
+                .font(.footnote)
+                .foregroundStyle(Theme.secondaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Theme.cell, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.elevated.opacity(0.6), lineWidth: 1))
     }
 }
