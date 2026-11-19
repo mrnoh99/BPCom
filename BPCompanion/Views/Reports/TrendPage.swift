@@ -1,12 +1,13 @@
 import SwiftUI
 import Charts
 
-/// Page 2: line chart of BP / HR / Weight with dashed average lines.
+/// Page 2: line chart of BP / HR with dashed average lines.
+/// (Body weight is analysed separately in the Body tab, from Apple Health.)
 struct TrendPage: View {
     let readings: [Reading]
     let period: ReportPeriod
 
-    enum Metric: String, CaseIterable { case bp = "BP", hr = "HR", weight = "Weight" }
+    enum Metric: String, CaseIterable { case bp = "BP", hr = "HR" }
     @State private var metric: Metric = .bp
 
     private struct Point: Identifiable {
@@ -15,7 +16,6 @@ struct TrendPage: View {
         let sys: Double
         let dia: Double
         let pulse: Double
-        let weight: Double?
     }
 
     private enum Bucket { case reading, day, month }
@@ -35,12 +35,10 @@ struct TrendPage: View {
     private var points: [Point] {
         func avg(_ v: [Double]) -> Double { v.reduce(0, +) / Double(max(v.count, 1)) }
         func make(_ date: Date, _ rs: [Reading]) -> Point {
-            let ws = rs.compactMap(\.weight)
             return Point(date: date,
                          sys: avg(rs.map { Double($0.systolic) }),
                          dia: avg(rs.map { Double($0.diastolic) }),
-                         pulse: avg(rs.map { Double($0.pulse) }),
-                         weight: ws.isEmpty ? nil : avg(ws))
+                         pulse: avg(rs.map { Double($0.pulse) }))
         }
         switch bucket {
         case .reading:
@@ -138,7 +136,7 @@ struct TrendPage: View {
     @ViewBuilder
     private var legend: some View {
         HStack(alignment: .top) {
-            Text(metric == .bp ? "mmHg" : (metric == .hr ? "bpm" : "kg"))
+            Text(metric == .bp ? "mmHg" : "bpm")
                 .foregroundStyle(Theme.label)
             Spacer()
             switch metric {
@@ -156,10 +154,6 @@ struct TrendPage: View {
                 legendItem("Heart Rate", Theme.pulseLine, dashed: false)
                 Spacer()
                 legendItem("Avg Heart Rate", Theme.pulseLine, dashed: true)
-            case .weight:
-                legendItem("Weight", Theme.weightLine, dashed: false)
-                Spacer()
-                legendItem("Avg Weight", Theme.weightLine, dashed: true)
             }
         }
         .font(.subheadline)
@@ -219,27 +213,6 @@ struct TrendPage: View {
             }
             .modifier(AxisStyle(xDomain: xDomain, yDomain: yDomain(v), xValues: xValues, xFormat: xFormat))
 
-        case .weight:
-            let wp = points.filter { $0.weight != nil }
-            let v = wp.compactMap(\.weight)
-            if wp.isEmpty {
-                ContentUnavailableView("No Weight", systemImage: "scalemass",
-                                       description: Text("No weight recorded in this period."))
-                    .frame(maxHeight: .infinity)
-            } else {
-                Chart {
-                    ForEach(wp) { p in
-                        LineMark(x: .value("Date", p.date), y: .value("kg", p.weight ?? 0))
-                            .foregroundStyle(Theme.weightLine)
-                        PointMark(x: .value("Date", p.date), y: .value("kg", p.weight ?? 0))
-                            .foregroundStyle(Theme.weightLine)
-                    }
-                    RuleMark(y: .value("Avg", mean(v)))
-                        .foregroundStyle(Theme.weightLine)
-                        .lineStyle(StrokeStyle(lineWidth: 1.2, dash: [6, 4]))
-                }
-                .modifier(AxisStyle(xDomain: xDomain, yDomain: yDomain(v, pad: 2), xValues: xValues, xFormat: xFormat))
-            }
         }
     }
 

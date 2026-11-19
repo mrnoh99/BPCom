@@ -12,16 +12,12 @@ final class Reading {
     var systolic: Int = 120
     var diastolic: Int = 80
     var pulse: Int = 70
-    /// Body weight in kg. `nil` when no weight was recorded with this reading.
+    /// Legacy: body weight in kg kept only for the CSV "Weight (kg)" column.
+    /// Not entered or shown in the app — body data comes from Apple Health (Body tab).
     var weight: Double?
     var drug: Bool = false
     var note: String = ""
     var starred: Bool = false
-    /// Health sample UUID when `weight` came from another app via Apple Health (e.g. YUNMAI).
-    /// Also kept after the user clears that weight, so the same weigh-in is not imported again.
-    var weightSourceID: String?
-    /// Name of the app the imported weight came from (e.g. "YUNMAI").
-    var weightSourceName: String?
 
     init(date: Date = .now,
          systolic: Int,

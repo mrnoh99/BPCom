@@ -17,7 +17,6 @@ struct StatsTable: View {
             row("DIASTOLIC", stats.diastolic, unit: "mmHg", format: Fmt.int)
             row("HR", stats.pulse, unit: "bpm", format: Fmt.int)
             row("MAP", stats.map, unit: "mmHg", format: Fmt.int)
-            row("WEIGHT", stats.weight, unit: "kg", format: Fmt.weight)
         }
         .background(Theme.gridLine)
     }

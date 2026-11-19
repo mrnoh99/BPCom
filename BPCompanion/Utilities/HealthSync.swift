@@ -3,7 +3,8 @@ import HealthKit
 import SwiftData
 
 /// Writes readings to the Apple Health app:
-/// blood pressure (systolic/diastolic correlation), heart rate and body weight.
+/// blood pressure (systolic/diastolic correlation) and heart rate.
+/// (Body weight is not written: it comes from the scale app and is read by `BodyStore`.)
 ///
 /// Every sample carries `HKMetadataKeySyncIdentifier` derived from the reading's UUID,
 /// so writing the same reading again (an edit, "Send All", or another device that
@@ -16,8 +17,6 @@ final class HealthSync: ObservableObject {
     static let readingKey = "BPCompanionReadingID"
 
     let store = HKHealthStore()
-    var weightObserver: HKObserverQuery?
-    static let weightReadRequestedKey = "healthWeightReadRequested"
 
     @Published private(set) var busy = false
     /// Last error from writing to Health (shown in Settings).
@@ -49,7 +48,7 @@ final class HealthSync: ObservableObject {
 
     private var quantityTypes: [HKQuantityType] {
         [HKQuantityType(.bloodPressureSystolic), HKQuantityType(.bloodPressureDiastolic),
-         HKQuantityType(.heartRate), HKQuantityType(.bodyMass)]
+         HKQuantityType(.heartRate)]
     }
 
     /// True when the user allowed writing blood pressure in the Health permission sheet.
@@ -61,12 +60,12 @@ final class HealthSync: ObservableObject {
 
     func requestAuthorization() async throws {
         guard isAvailable else { throw HealthError.unavailable }
-        // Write: BP, heart rate, weight (when "Write to Health" is on).
-        // Read: weight only (when "Import Weight" is on) — e.g. from the YUNMAI scale app.
+        // Write: BP and heart rate (when "Write to Health" is on).
+        // Read: weight, BMI, body fat, lean mass (when "Read Body Data" is on) — e.g. YUNMAI.
         let share: Set<HKSampleType> = UserDefaults.standard.bool(forKey: SettingsKey.healthEnabled)
             ? Set(quantityTypes) : []
-        let read: Set<HKObjectType> = UserDefaults.standard.bool(forKey: SettingsKey.healthImportWeight)
-            ? [HKQuantityType(.bodyMass)] : []
+        let read: Set<HKObjectType> = UserDefaults.standard.bool(forKey: SettingsKey.healthReadBody)
+            ? BodyStore.readTypes : []
         guard !share.isEmpty || !read.isEmpty else { return }
         defer { accessChecked += 1 }
         do {
@@ -75,7 +74,7 @@ final class HealthSync: ObservableObject {
                     if let error { c.resume(throwing: error) } else { c.resume() }
                 }
             }
-            if !read.isEmpty { UserDefaults.standard.set(true, forKey: Self.weightReadRequestedKey) }
+            if !read.isEmpty { UserDefaults.standard.set(true, forKey: BodyStore.readRequestedKey) }
         } catch {
             // Typically "Missing com.apple.developer.healthkit entitlement" when the
             // HealthKit capability is not enabled for the signing team / App ID.
@@ -100,12 +99,11 @@ final class HealthSync: ObservableObject {
         }
     }
 
-    /// App became active: permission (first time) → copy readings → import today's weigh-ins.
-    /// One after another, so the Health permission sheet is shown only once.
+    /// App became active: permission (first time, write + body read together) → copy
+    /// readings → load body data. One after another, so the permission sheet shows once.
     func onBecameActive(_ context: ModelContext) async {
         await autoConnectIfNeeded(context)
-        startWeightObserver(context)
-        await importTodayWeights(context)
+        await BodyStore.shared.refresh()
     }
 
     // MARK: Writing
@@ -117,7 +115,6 @@ final class HealthSync: ObservableObject {
         let systolic: Int
         let diastolic: Int
         let pulse: Int
-        let weight: Double?
 
         init(_ r: Reading) {
             id = r.id.uuidString
@@ -125,8 +122,6 @@ final class HealthSync: ObservableObject {
             systolic = r.systolic
             diastolic = r.diastolic
             pulse = r.pulse
-            // A weight imported from another app is already in Health — don't write it again.
-            weight = r.weightSourceID == nil ? r.weight : nil
         }
     }
 
@@ -171,7 +166,7 @@ final class HealthSync: ObservableObject {
     }
 
     private func write(_ snaps: [Snapshot]) async throws {
-        // Remove old samples first so a cleared weight / pulse doesn't linger after an edit.
+        // Remove old samples first so a cleared pulse doesn't linger after an edit.
         try? await delete(snaps.map(\.id))
 
         let version = Int(Date().timeIntervalSince1970)
@@ -225,11 +220,6 @@ final class HealthSync: ObservableObject {
                                         quantity: HKQuantity(unit: .count().unitDivided(by: .minute()),
                                                              doubleValue: Double(s.pulse)),
                                         start: s.date, end: s.date, metadata: meta("hr")))
-        }
-        if let w = s.weight {
-            out.append(HKQuantitySample(type: HKQuantityType(.bodyMass),
-                                        quantity: HKQuantity(unit: .gramUnit(with: .kilo), doubleValue: w),
-                                        start: s.date, end: s.date, metadata: meta("kg")))
         }
         return out
     }
