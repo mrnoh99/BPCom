@@ -49,7 +49,9 @@ struct AddEntryView: View {
         let tenths = Int((w * 10).rounded())
         _weightWhole = State(initialValue: tenths / 10)
         _weightTenth = State(initialValue: tenths % 10)
-        _hasWeight = State(initialValue: src?.weight != nil)
+        // New entries start with no weight ("--.-"); turning the kg wheel sets one.
+        // The wheel still starts at the last weight for convenience. Edits keep their weight.
+        _hasWeight = State(initialValue: editing?.weight != nil)
 
         _note = State(initialValue: editing?.note ?? "")
         _starred = State(initialValue: editing?.starred ?? false)
