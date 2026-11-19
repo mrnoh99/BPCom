@@ -49,6 +49,12 @@ enum Theme {
 }
 
 extension View {
+    /// On iPad (and other wide screens) keeps tables/lists at a readable width, centered.
+    func readableWidth(_ max: CGFloat = 820) -> some View {
+        frame(maxWidth: max)
+            .frame(maxWidth: .infinity)
+    }
+
     /// Orange navigation bar with white title/buttons.
     func orangeNavigationBar() -> some View {
         self

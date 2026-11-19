@@ -65,9 +65,10 @@ struct ReportsView: View {
                 StatsTable(stats: ReadingStats(readings), rowHeight: 58)
                 Spacer(minLength: 0)
             }
+            .readableWidth()
             .padding(.bottom, 28)
         case 1: TrendPage(readings: readings, period: period).padding(.bottom, 28)
-        case 2: RangePage(readings: readings).padding(.bottom, 28)
+        case 2: RangePage(readings: readings).readableWidth().padding(.bottom, 28)
         default: StatisticsPage(readings: readings).padding(.bottom, 28)
         }
     }
