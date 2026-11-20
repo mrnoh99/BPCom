@@ -29,6 +29,7 @@ struct SettingsView: View {
     @StateObject private var health = HealthSync.shared
     @Environment(\.openURL) private var openURL
     @State private var healthResult: String?
+    @State private var confirmSendImported = false
     @ObservedObject private var bodyStore = BodyStore.shared
 
     @EnvironmentObject private var sync: CloudSyncMonitor
@@ -160,6 +161,25 @@ struct SettingsView: View {
                         .tint(Theme.orange)
                         .onChange(of: healthReadBody) { _, on in
                             if on { Task { try? await health.requestAuthorization(); await BodyStore.shared.refresh() } }
+                        }
+                        if bodyStore.importedCount > 0 {
+                            Button {
+                                confirmSendImported = true
+                            } label: {
+                                HStack {
+                                    Label("Send Imported YUNMAI Data to Health", systemImage: "arrow.up.heart")
+                                    Spacer()
+                                    if health.busy { ProgressView() }
+                                }
+                            }
+                            .disabled(health.busy)
+                            .confirmationDialog("Send \(bodyStore.importedCount) imported weigh-ins to Health?",
+                                                isPresented: $confirmSendImported, titleVisibility: .visible) {
+                                Button("Send") { sendImportedToHealth() }
+                                Button("Cancel", role: .cancel) {}
+                            } message: {
+                                Text("Weight, BMI, body fat, lean mass and height are written with their original dates, only for weigh-ins Health doesn't already have. They appear in Health with BP Companion as the source.")
+                            }
                         }
                         if healthReadBody && !bodyStore.allSources.isEmpty {
                             DisclosureGroup("Body Data Sources") {
@@ -349,6 +369,19 @@ struct SettingsView: View {
             } catch {
                 healthResult = "Could not connect to Health. Check that the HealthKit capability is enabled in Xcode › Signing & Capabilities."
                 healthEnabled = false
+            }
+        }
+    }
+
+    private func sendImportedToHealth() {
+        Task {
+            do {
+                let n = try await health.sendImportedBody(bodyStore.imported)
+                healthResult = n == 0
+                    ? "Health already has all imported weigh-ins."
+                    : "Sent \(n) weigh-in\(n == 1 ? "" : "s") to Health."
+            } catch {
+                healthResult = "Could not send: \(error.localizedDescription)"
             }
         }
     }

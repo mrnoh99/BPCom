@@ -186,6 +186,14 @@ final class BodyStore: ObservableObject {
         self.context = context
     }
 
+    /// Minutes that already have this metric in Health from any app (before filtering),
+    /// so imported weigh-ins are not written to Health twice.
+    func healthMinutes(_ m: Metric) -> Set<Int> {
+        Set((raw[m] ?? []).map { Self.minute($0.date) })
+    }
+
+    var healthHeightMinutes: Set<Int> { Set(rawHeights.map { Self.minute($0.date) }) }
+
     /// Imported record of the same minute (for skeletal muscle, water, …).
     func extra(at date: Date) -> Imported? { extrasByMinute[Self.minute(date)] }
 
