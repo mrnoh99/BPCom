@@ -21,6 +21,9 @@ final class HealthSync: ObservableObject {
     @Published private(set) var busy = false
     /// Last error from writing to Health (shown in Settings).
     @Published private(set) var lastError: String?
+
+    /// Settings shows the last error only until it is opened again.
+    func clearMessages() { lastError = nil }
     /// Bumped after an authorization request so views re-read `access`.
     @Published private(set) var accessChecked = 0
 

@@ -23,10 +23,6 @@ struct RootView: View {
                 .noTopScrollBlur()
                 .tabItem { Label("Reports", systemImage: "chart.line.uptrend.xyaxis") }
                 .tag(2)
-            BodyView()
-                .noTopScrollBlur()
-                .tabItem { Label("Body", systemImage: "figure") }
-                .tag(4)
             SettingsView()
                 .noTopScrollBlur()
                 .tabItem { Label("Settings", systemImage: "gearshape") }

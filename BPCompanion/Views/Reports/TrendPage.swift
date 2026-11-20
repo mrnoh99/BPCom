@@ -2,7 +2,7 @@ import SwiftUI
 import Charts
 
 /// Page 2: line chart of BP / HR with dashed average lines.
-/// (Body weight is analysed separately in the Body tab, from Apple Health.)
+/// (Body weight is analysed separately in Reports › Weight, from Apple Health.)
 struct TrendPage: View {
     let readings: [Reading]
     let period: ReportPeriod

@@ -33,6 +33,7 @@ struct SettingsView: View {
     @StateObject private var health = HealthSync.shared
     @Environment(\.openURL) private var openURL
     @State private var healthResult: String?
+    @State private var sourcesExpanded = false
     @ObservedObject private var bodyStore = BodyStore.shared
 
     @EnvironmentObject private var sync: CloudSyncMonitor
@@ -192,7 +193,7 @@ struct SettingsView: View {
                             if on { Task { try? await health.requestAuthorization(); await BodyStore.shared.refresh() } }
                         }
                         if healthReadBody && !bodyStore.allSources.isEmpty {
-                            DisclosureGroup("Body Data Sources") {
+                            DisclosureGroup("Body Data Sources", isExpanded: $sourcesExpanded) {
                                 ForEach(bodyStore.allSources, id: \.self) { name in
                                     Toggle(name, isOn: Binding(
                                         get: { bodyStore.isIncluded(name) },
@@ -211,8 +212,6 @@ struct SettingsView: View {
                         }
                     } header: {
                         Text("Apple Health")
-                    } footer: {
-                        Text("Write: blood pressure and heart rate are saved to the Health app; new, edited and deleted readings are updated automatically. Send All to Health also sends the imported YUNMAI history (weight, BMI, body fat, lean mass, height) for weigh-ins Health doesn't have — never twice. Read Body Data: weight, BMI, body fat and lean body mass from your scale app (e.g. YUNMAI) are shown and analysed in the Body tab. Allow access in Health › Sharing › Apps › BP Companion.")
                     }
                 }
 
@@ -251,9 +250,10 @@ struct SettingsView: View {
                 } header: {
                     Text("iCloud")
                 } footer: {
-                    Text(iCloudSync != launchICloudSync
-                         ? "Restart the app (swipe it away and open it again) to apply this change."
-                         : "Readings are synced through your private iCloud database to every iPhone/iPad signed in with the same Apple ID. Changes usually appear on other devices within a minute while the app is open.")
+                    // Shown only right after the switch is changed.
+                    if iCloudSync != launchICloudSync {
+                        Text("Restart the app (swipe it away and open it again) to apply this change.")
+                    }
                 }
 
                 #if DEBUG
@@ -308,11 +308,14 @@ struct SettingsView: View {
                 case .failure(let error): showDataResult("Import failed: \(error.localizedDescription)", error: true)
                 }
             }
-            // Opening Settings again starts with the info collapsed.
             .task { cloudBackups = await BackupFolder.list() }
+            // Result messages appear after an action and are gone when Settings is opened again.
             .onDisappear {
                 dataInfoExpanded = false
                 dataResult = nil
+                healthResult = nil
+                sourcesExpanded = false
+                health.clearMessages()
             }
         }
     }

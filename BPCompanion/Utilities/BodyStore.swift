@@ -71,7 +71,7 @@ final class BodyStore: ObservableObject {
     static let readRequestedKey = "healthBodyReadRequested.v2"
 
     @Published private(set) var samples: [Metric: [Sample]] = [:]
-    /// Height in cm (YUNMAI writes it too). Shown in the Body tab; it rarely changes,
+    /// Height in cm (YUNMAI writes it too). Shown in Reports › Weight; it rarely changes,
     /// so it is not part of the period analysis.
     @Published private(set) var heights: [Sample] = []
     @Published private(set) var loaded = false

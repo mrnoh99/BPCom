@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 /// "+" screen: Basic (BP / pulse / date) and Note tabs.
-/// Body weight is not entered here — it comes from Apple Health (e.g. YUNMAI) in the Body tab.
+/// Body weight is not entered here — it comes from Apple Health (e.g. YUNMAI) in Reports › Weight.
 /// Also used to edit an existing reading from History.
 struct AddEntryView: View {
     @Environment(\.dismiss) private var dismiss

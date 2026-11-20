@@ -1,65 +1,57 @@
 import SwiftUI
 import Charts
 
-/// Body tab: weight, BMI, body fat and lean body mass from Apple Health (YUNMAI etc.),
-/// analysed on its own — latest values, period summary, trend chart and change analysis.
-struct BodyView: View {
-    @StateObject private var body_ = BodyStore.shared
-    @AppStorage(SettingsKey.healthReadBody) private var readBody = true
+/// Reports › Weight: weight, BMI, body fat, lean mass, height and the YUNMAI-only items,
+/// from Apple Health and the imported YUNMAI history, as swipeable pages like the blood
+/// pressure report — Summary, Trend, Composition, Analysis, Weigh-ins.
+struct WeightReportView: View {
+    @ObservedObject private var body_ = BodyStore.shared
+    @Binding var period: ReportPeriod
+    /// nil = all apps
+    @Binding var source: String?
+    @Binding var page: Int
 
-    @State private var period = ReportPeriod(kind: .month)
-    @State private var showCustom = false
     @State private var metric: BodyStore.Metric = .weight
-    @State private var source: String?        // nil = all apps
     @State private var showAllHistory = false
 
     typealias Metric = BodyStore.Metric
 
+    static let titles = ["Body Summary", "Weight Trend", "Composition", "Analysis", "Weigh-ins"]
+
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                if body_.loaded && !body_.hasAnyData {
-                    BodyEmptyState()
-                } else {
-                    PeriodHeader(period: $period)
-                    Theme.separator.frame(height: 4)
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            if body_.weightAccessLikelyOff {
-                                WeightAccessHint().padding([.horizontal, .top], 12)
-                            }
-                            latestCard
-                            Theme.separator.frame(height: 4)
-                            summaryTable
-                            Theme.separator.frame(height: 4)
-                            composition
-                            trend
-                            Theme.separator.frame(height: 4)
-                            analysis
-                            Theme.separator.frame(height: 4)
-                            history
+        Group {
+            if body_.loaded && !body_.hasAnyData {
+                BodyEmptyState()
+            } else {
+                TabView(selection: $page) {
+                    pageScroll {
+                        if body_.weightAccessLikelyOff {
+                            WeightAccessHint().padding([.horizontal, .top], 12)
                         }
-                        .readableWidth()
+                        latestCard
+                        Theme.separator.frame(height: 4)
+                        summaryTable
                     }
-                    Theme.separator.frame(height: 4)
-                    PeriodSelector(period: $period, filter: .constant(.all), showCustom: $showCustom, showsFilter: false)
+                    .tag(0)
+                    pageScroll { trend }.tag(1)
+                    pageScroll { composition }.tag(2)
+                    pageScroll { analysis }.tag(3)
+                    pageScroll { history }.tag(4)
                 }
+                .tabViewStyle(.page(indexDisplayMode: .always))
+                .indexViewStyle(.page(backgroundDisplayMode: .never))
             }
-            .background(Theme.background)
-            .navigationTitle("Body")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if body_.sources.count > 1 {
-                    ToolbarItem(placement: .topBarTrailing) { sourceMenu }
-                }
-            }
-            .orangeNavigationBar()
-            .sheet(isPresented: $showCustom) {
-                CustomRangeSheet(period: $period).presentationDetents([.medium])
-            }
-            .task { await body_.refresh() }
-            .refreshable { await body_.refresh() }
         }
+        .task { await body_.refresh() }
+    }
+
+    private func pageScroll<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        ScrollView {
+            VStack(spacing: 0) { content() }
+                .readableWidth()
+                .padding(.bottom, 36)       // room for the page dots
+        }
+        .refreshable { await body_.refresh() }
     }
 
     // MARK: Data for the period
@@ -252,7 +244,7 @@ struct BodyView: View {
     }
 
     /// Items only in the imported YUNMAI history (not in Health): latest, period average
-    /// and change, like the summary table. Hidden when the period has no imported data.
+    /// and change, like the summary table.
     @ViewBuilder
     private var composition: some View {
         let recs = body_.imported.filter {
@@ -304,7 +296,11 @@ struct BodyView: View {
                 }
                 .background(Theme.gridLine)
             }
-            Theme.separator.frame(height: 4)
+        } else {
+            Text("No YUNMAI composition data in this period. Import the YUNMAI history in Settings › Data › Import YUNMAI Data to see skeletal muscle, water, protein, visceral fat, bone, BMR and body age.")
+                .font(.subheadline)
+                .foregroundStyle(Theme.secondaryText)
+                .padding(16)
         }
     }
 
@@ -404,23 +400,5 @@ struct BodyView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-    }
-
-    // MARK: Pieces
-
-    private var sourceMenu: some View {
-        Menu {
-            Picker("Source", selection: $source) {
-                Text("All apps").tag(String?.none)
-                ForEach(body_.sources, id: \.self) { Text($0).tag(String?.some($0)) }
-            }
-        } label: {
-            Image(systemName: "line.3.horizontal.decrease.circle").font(.title3)
-        }
-    }
-
-    private func unavailable(_ title: String, _ message: String) -> some View {
-        ContentUnavailableView(title, systemImage: "scalemass", description: Text(message))
-            .frame(maxHeight: .infinity)
     }
 }
