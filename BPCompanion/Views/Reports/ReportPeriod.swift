@@ -57,6 +57,15 @@ struct ReportPeriod: Equatable {
     /// The window ends today (no need for the Today button).
     var endsToday: Bool { to == cal.startOfDay(for: .now) }
 
+    /// Reports open on the last 14 days including today (a Custom window: the arrows move
+    /// it by two weeks and Today brings it back).
+    static var lastTwoWeeks: ReportPeriod {
+        var p = ReportPeriod()
+        let today = Calendar.current.startOfDay(for: .now)
+        p.setCustom(from: Calendar.current.date(byAdding: .day, value: -13, to: today)!, to: today)
+        return p
+    }
+
     /// Back to a window ending today, same length.
     mutating func goToToday() {
         let today = cal.startOfDay(for: .now)

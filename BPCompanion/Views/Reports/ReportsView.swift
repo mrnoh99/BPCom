@@ -13,7 +13,7 @@ struct ReportsView: View {
     @State private var weightPage = 0
     @State private var source: String?        // weight: nil = all apps
 
-    @State private var period = ReportPeriod()
+    @State private var period = ReportPeriod.lastTwoWeeks
     @State private var filter: TimeFilter = .all
     @State private var page = 0
     @State private var showCustom = false
