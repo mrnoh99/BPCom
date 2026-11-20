@@ -169,10 +169,14 @@ final class HealthSync: ObservableObject {
         // Remove old samples first so a cleared pulse doesn't linger after an edit.
         try? await delete(snaps.map(\.id))
 
+        // Only types the user allowed: Health rejects the whole save ("Not authorized")
+        // if any one sample's type is not allowed.
+        let bpAllowed = canWrite(.bloodPressureSystolic) && canWrite(.bloodPressureDiastolic)
+        let hrAllowed = canWrite(.heartRate)
         let version = Int(Date().timeIntervalSince1970)
         var objects: [HKObject] = []
         for s in snaps {
-            objects.append(contentsOf: samples(for: s, version: version))
+            objects.append(contentsOf: samples(for: s, version: version, bp: bpAllowed, hr: hrAllowed))
         }
         guard !objects.isEmpty else { return }
         try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
@@ -195,7 +199,11 @@ final class HealthSync: ObservableObject {
         }
     }
 
-    private func samples(for s: Snapshot, version: Int) -> [HKObject] {
+    func canWrite(_ id: HKQuantityTypeIdentifier) -> Bool {
+        store.authorizationStatus(for: HKQuantityType(id)) == .sharingAuthorized
+    }
+
+    private func samples(for s: Snapshot, version: Int, bp: Bool, hr: Bool) -> [HKObject] {
         func meta(_ suffix: String) -> [String: Any] {
             [HKMetadataKeySyncIdentifier: "\(s.id).\(suffix)",
              HKMetadataKeySyncVersion: version,
@@ -205,17 +213,19 @@ final class HealthSync: ObservableObject {
         let mmHg = HKUnit.millimeterOfMercury()
         var out: [HKObject] = []
 
-        let sys = HKQuantitySample(type: HKQuantityType(.bloodPressureSystolic),
-                                   quantity: HKQuantity(unit: mmHg, doubleValue: Double(s.systolic)),
-                                   start: s.date, end: s.date, metadata: meta("sys"))
-        let dia = HKQuantitySample(type: HKQuantityType(.bloodPressureDiastolic),
-                                   quantity: HKQuantity(unit: mmHg, doubleValue: Double(s.diastolic)),
-                                   start: s.date, end: s.date, metadata: meta("dia"))
-        out.append(HKCorrelation(type: HKCorrelationType(.bloodPressure),
-                                 start: s.date, end: s.date,
-                                 objects: [sys, dia], metadata: meta("bp")))
+        if bp {
+            let sys = HKQuantitySample(type: HKQuantityType(.bloodPressureSystolic),
+                                       quantity: HKQuantity(unit: mmHg, doubleValue: Double(s.systolic)),
+                                       start: s.date, end: s.date, metadata: meta("sys"))
+            let dia = HKQuantitySample(type: HKQuantityType(.bloodPressureDiastolic),
+                                       quantity: HKQuantity(unit: mmHg, doubleValue: Double(s.diastolic)),
+                                       start: s.date, end: s.date, metadata: meta("dia"))
+            out.append(HKCorrelation(type: HKCorrelationType(.bloodPressure),
+                                     start: s.date, end: s.date,
+                                     objects: [sys, dia], metadata: meta("bp")))
+        }
 
-        if s.pulse > 0 {
+        if hr && s.pulse > 0 {
             out.append(HKQuantitySample(type: HKQuantityType(.heartRate),
                                         quantity: HKQuantity(unit: .count().unitDivided(by: .minute()),
                                                              doubleValue: Double(s.pulse)),
@@ -289,17 +299,6 @@ final class HealthSync: ObservableObject {
     /// Returns the number of weigh-ins written.
     func sendImportedBody(_ records: [BodyStore.Imported]) async throws -> Int {
         guard isAvailable else { throw HealthError.unavailable }
-        let types: [HKQuantityType] = [HKQuantityType(.bodyMass), HKQuantityType(.bodyMassIndex),
-                                       HKQuantityType(.bodyFatPercentage), HKQuantityType(.leanBodyMass),
-                                       HKQuantityType(.height)]
-        try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
-            store.requestAuthorization(toShare: Set(types), read: Set(types)) { _, error in
-                if let error { c.resume(throwing: error) } else { c.resume() }
-            }
-        }
-        guard store.authorizationStatus(for: HKQuantityType(.bodyMass)) == .sharingAuthorized else {
-            throw HealthError.notAllowed
-        }
 
         // What Health already has (YUNMAI's own samples, from any device).
         let body = BodyStore.shared
@@ -314,7 +313,8 @@ final class HealthSync: ObservableObject {
             let minute = BodyStore.minute(r.date)
             var wroteAny = false
             func add(_ type: HKQuantityType, _ unit: HKUnit, _ value: Double?, _ tag: String, skip: Bool) {
-                guard let value, value > 0, !skip else { return }
+                guard let value, value > 0, !skip,
+                      store.authorizationStatus(for: type) == .sharingAuthorized else { return }
                 let meta: [String: Any] = [HKMetadataKeySyncIdentifier: "yunmai.\(minute).\(tag)",
                                            HKMetadataKeySyncVersion: 1,
                                            "BPCompanionImportedFrom": r.source]
@@ -348,6 +348,58 @@ final class HealthSync: ObservableObject {
             start += 500
         }
         return written
+    }
+
+    // MARK: Send everything
+
+    /// Every type "Send All to Health" writes, with the names Health shows.
+    private static let sendTypes: [(HKQuantityTypeIdentifier, String)] = [
+        (.bloodPressureSystolic, "Blood Pressure"), (.bloodPressureDiastolic, "Blood Pressure"),
+        (.heartRate, "Heart Rate"), (.bodyMass, "Weight"), (.bodyMassIndex, "Body Mass Index"),
+        (.bodyFatPercentage, "Body Fat Percentage"), (.leanBodyMass, "Lean Body Mass"), (.height, "Height"),
+    ]
+
+    /// "Send All to Health": blood pressure readings and the imported YUNMAI history.
+    /// Asks write permission for every type first, writes only the allowed ones (no
+    /// "Not authorized" for the whole batch), skips weigh-ins Health already has and
+    /// replaces earlier copies by sync identifier — so nothing is duplicated.
+    /// Returns a message for Settings.
+    func sendEverything(readings: [Reading], imported: [BodyStore.Imported]) async -> String {
+        guard isAvailable else { return HealthError.unavailable.localizedDescription }
+        let share = Set(Self.sendTypes.map { HKQuantityType($0.0) as HKSampleType })
+        var read = BodyStore.readTypes
+        read.insert(HKQuantityType(.heartRate))
+        do {
+            try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
+                store.requestAuthorization(toShare: share, read: read) { _, error in
+                    if let error { c.resume(throwing: error) } else { c.resume() }
+                }
+            }
+        } catch {
+            return "Health: \(error.localizedDescription)"
+        }
+        accessChecked += 1
+
+        var parts: [String] = []
+        do {
+            if !readings.isEmpty, canWrite(.bloodPressureSystolic) || canWrite(.heartRate) {
+                let n = try await sendAll(readings)
+                parts.append("\(n) blood pressure readings")
+            }
+            if !imported.isEmpty {
+                let n = try await sendImportedBody(imported)
+                parts.append("\(n) new YUNMAI weigh-ins")
+            }
+        } catch {
+            return "Health: \(error.localizedDescription)"
+        }
+
+        var message = parts.isEmpty ? "Nothing was sent." : "Sent to Health: " + parts.joined(separator: ", ") + "."
+        let denied = Array(Set(Self.sendTypes.filter { !canWrite($0.0) }.map(\.1))).sorted()
+        if !denied.isEmpty {
+            message += " Not allowed, so skipped: \(denied.joined(separator: ", ")). Turn them on in Health › Sharing › Apps › BP Companion (iPad: Settings › Health › Data Access & Devices)."
+        }
+        return message
     }
 
     enum HealthError: LocalizedError {
