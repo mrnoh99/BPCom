@@ -13,7 +13,7 @@ struct ReportsView: View {
     @State private var weightPage = 0
     @State private var source: String?        // weight: nil = all apps
 
-    @State private var period = ReportPeriod()
+    @State private var period = ReportPeriod.lastTwoWeeks
     @State private var filter: TimeFilter = .all
     @State private var page = 0
     @State private var showCustom = false
@@ -273,9 +273,10 @@ struct CustomRangeSheet: View {
             Form {
                 Section {
                     HStack(spacing: 8) {
-                        quick("Today", cal.startOfDay(for: .now))
-                        quick("This Week", cal.dateInterval(of: .weekOfYear, for: .now)?.start ?? .now)
+                        // Same as the 2W button: the last 14 days including today.
+                        quickButton("This 2 Weeks") { period = ReportPeriod(kind: .week) }
                         quick("This Month", cal.dateInterval(of: .month, for: .now)?.start ?? .now)
+                        quick("This Year", cal.dateInterval(of: .year, for: .now)?.start ?? .now)
                     }
                     .listRowBackground(Color.clear)
                 }
@@ -310,10 +311,14 @@ struct CustomRangeSheet: View {
         }
     }
 
-    /// Today / This Week / This Month: start of that period up to today, applied at once.
+    /// This 2 Weeks / This Month / This Year: start of that period up to today, applied at once.
     private func quick(_ title: String, _ start: Date) -> some View {
+        quickButton(title) { period.setCustom(from: start, to: .now) }
+    }
+
+    private func quickButton(_ title: String, _ apply: @escaping () -> Void) -> some View {
         Button {
-            period.setCustom(from: start, to: .now)
+            apply()
             dismiss()
         } label: {
             Text(title)
