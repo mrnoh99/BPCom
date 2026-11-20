@@ -27,7 +27,7 @@ struct BPCompanionApp: App {
     /// with the same Apple ID sees the same readings. Existing local readings are uploaded
     /// the first time sync is turned on.
     static func makeContainer() -> (ModelContainer, cloudEnabled: Bool, setupError: String?) {
-        let schema = Schema([Reading.self])
+        let schema = Schema([Reading.self, BodyRecord.self])
         let useCloud = UserDefaults.standard.object(forKey: SettingsKey.iCloudSync) as? Bool ?? true
 
         if useCloud {

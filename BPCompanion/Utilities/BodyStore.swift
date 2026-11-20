@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import SwiftUI
+import SwiftData
 
 /// Body composition read from Apple Health — weight, BMI, body fat, lean body mass and height —
 /// as written by a smart scale app such as YUNMAI. Kept separate from the blood-pressure
@@ -149,6 +150,68 @@ final class BodyStore: ObservableObject {
     private let store = HKHealthStore()
     private var observers: [HKObserverQuery] = []
 
+    // MARK: Imported YUNMAI history (BodyRecord, synced with iCloud)
+
+    /// Value copy of a `BodyRecord`.
+    struct Imported: Identifiable {
+        let id: UUID
+        let date: Date
+        let source: String
+        let weight, bmi, bodyFat, leanMass, skeletalMuscle, muscle, water, protein,
+            visceralFat, boneMass, bmr, bodyAge, height: Double?
+        var fatMass: Double? { weight.flatMap { w in bodyFat.map { w * $0 / 100 } } }
+        var bonePercent: Double? {
+            guard let b = boneMass, let w = weight, w > 0 else { return nil }
+            return b / w * 100
+        }
+        /// True when it carries the items Health does not have.
+        var hasExtras: Bool { [skeletalMuscle, water, protein, visceralFat, boneMass, bmr, bodyAge].contains { $0 != nil } }
+
+        init(_ r: BodyRecord) {
+            id = r.id; date = r.date; source = r.source
+            weight = r.weight; bmi = r.bmi; bodyFat = r.bodyFat; leanMass = r.leanMass
+            skeletalMuscle = r.skeletalMuscle; muscle = r.muscle; water = r.water; protein = r.protein
+            visceralFat = r.visceralFat; boneMass = r.boneMass; bmr = r.bmr; bodyAge = r.bodyAge
+            height = r.height
+        }
+    }
+
+    private var context: ModelContext?
+    @Published private(set) var imported: [Imported] = []
+    private var extrasByMinute: [Int: Imported] = [:]
+
+    /// Gives the store access to the SwiftData container (imported records).
+    func attach(_ context: ModelContext) {
+        guard self.context == nil else { return }
+        self.context = context
+    }
+
+    /// Imported record of the same minute (for skeletal muscle, water, …).
+    func extra(at date: Date) -> Imported? { extrasByMinute[Self.minute(date)] }
+
+    var importedCount: Int { imported.count }
+
+    static func minute(_ d: Date) -> Int { Int(d.timeIntervalSince1970 / 60) }
+
+    private func loadImported() {
+        guard let context else { return }
+        let all = (try? context.fetch(FetchDescriptor<BodyRecord>(sortBy: [SortDescriptor(\.date)]))) ?? []
+        imported = all.map(Imported.init)
+    }
+
+    /// Removes every imported YUNMAI record (Health data is not touched).
+    func deleteImported() async {
+        guard let context else { return }
+        for r in (try? context.fetch(FetchDescriptor<BodyRecord>())) ?? [] { context.delete(r) }
+        try? context.save()
+        await refresh()
+    }
+
+    /// Anything to show (Health or imported).
+    var hasAnyData: Bool {
+        !samples.values.allSatisfy { $0.isEmpty } || !heights.isEmpty
+    }
+
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
     var isEnabled: Bool { isAvailable && UserDefaults.standard.bool(forKey: SettingsKey.healthReadBody) }
 
@@ -174,29 +237,54 @@ final class BodyStore: ObservableObject {
 
     // MARK: Loading
 
-    /// Asks for read permission once, then loads all body samples from Health.
+    /// Loads imported YUNMAI records, then (when Health is on) asks for read permission
+    /// once and loads all body samples from Health.
     func refresh() async {
-        guard isEnabled, !loading else { return }
+        guard !loading else { return }
         loading = true
         defer { loading = false; loaded = true }
-        if !UserDefaults.standard.bool(forKey: Self.readRequestedKey) {
-            try? await HealthSync.shared.requestAuthorization()
+        loadImported()
+        if isEnabled {
+            if !UserDefaults.standard.bool(forKey: Self.readRequestedKey) {
+                try? await HealthSync.shared.requestAuthorization()
+            }
+            var loadedRaw: [Metric: [Sample]] = [:]
+            for m in Metric.allCases {
+                loadedRaw[m] = await load(m.type) { m.value(of: $0) }
+            }
+            raw = loadedRaw
+            rawHeights = await load(HKQuantityType(.height)) { $0.doubleValue(for: .meterUnit(with: .centi)) }
+        } else {
+            raw = [:]
+            rawHeights = []
         }
-        var loadedRaw: [Metric: [Sample]] = [:]
-        for m in Metric.allCases {
-            loadedRaw[m] = await load(m.type) { m.value(of: $0) }
-        }
-        raw = loadedRaw
-        rawHeights = await load(HKQuantityType(.height)) { $0.doubleValue(for: .meterUnit(with: .centi)) }
-        allSources = Array(Set(raw.values.flatMap { $0.map(\.source) } + rawHeights.map(\.source))).sorted()
+        allSources = Array(Set(raw.values.flatMap { $0.map(\.source) } + rawHeights.map(\.source)
+                               + imported.map(\.source))).sorted()
         applyFilter()
-        startObservers()
+        if isEnabled { startObservers() }
     }
 
     /// Drops excluded apps (e.g. "BP"), then estimates weight if none can be read.
     private func applyFilter() {
         let excluded = excludedSources
         var result = raw.mapValues { $0.filter { !excluded.contains($0.source) } }
+
+        // Imported YUNMAI weigh-ins fill in what Health doesn't have (same minute = same
+        // weigh-in, Health's value kept), e.g. the years YUNMAI never sent to Health.
+        let imp = imported.filter { !excluded.contains($0.source) }
+        extrasByMinute = Dictionary(imp.map { (Self.minute($0.date), $0) }, uniquingKeysWith: { a, _ in a })
+        func addImported(_ m: Metric, _ value: (Imported) -> Double?) {
+            let have = Set((result[m] ?? []).map { Self.minute($0.date) })
+            let more = imp.compactMap { r -> Sample? in
+                guard let v = value(r), !have.contains(Self.minute(r.date)) else { return nil }
+                return Sample(id: r.id, date: r.date, value: v, source: r.source)
+            }
+            if !more.isEmpty { result[m] = ((result[m] ?? []) + more).sorted { $0.date < $1.date } }
+        }
+        addImported(.weight) { $0.weight }
+        addImported(.bmi) { $0.bmi }
+        addImported(.bodyFat) { $0.bodyFat }
+        addImported(.leanMass) { $0.leanMass }
         // A weigh-in with lean mass and body fat but no readable weight (e.g. Weight read
         // access off) gets weight = lean ÷ (1 − fat%), marked as estimated.
         let realWeights = result[.weight] ?? []
@@ -206,7 +294,13 @@ final class BodyStore: ObservableObject {
         result[.weight] = (realWeights + estimates).sorted { $0.date < $1.date }
         weightEstimated = realWeights.isEmpty && !estimates.isEmpty
         samples = result
-        heights = rawHeights.filter { !excluded.contains($0.source) }
+        let healthHeights = rawHeights.filter { !excluded.contains($0.source) }
+        let haveH = Set(healthHeights.map { Self.minute($0.date) })
+        let importedHeights = imp.compactMap { r -> Sample? in
+            guard let h = r.height, !haveH.contains(Self.minute(r.date)) else { return nil }
+            return Sample(id: r.id, date: r.date, value: h, source: r.source)
+        }
+        heights = (healthHeights + importedHeights).sorted { $0.date < $1.date }
     }
 
     private func load(_ type: HKQuantityType, value: @escaping (HKQuantity) -> Double) async -> [Sample] {

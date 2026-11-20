@@ -18,13 +18,7 @@ struct BodyView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if !body_.isAvailable {
-                    unavailable("Health Not Available",
-                                "Apple Health is not available on this device. Open BP Companion on iPhone to see body data from your scale.")
-                } else if !readBody {
-                    unavailable("Body Data Is Off",
-                                "Turn on Settings › Apple Health › Read Body Data to see weight, BMI, body fat and lean mass from your scale app.")
-                } else if body_.loaded && body_.samples.values.allSatisfy({ $0.isEmpty }) && body_.heights.isEmpty {
+                if body_.loaded && !body_.hasAnyData {
                     BodyEmptyState()
                 } else {
                     PeriodHeader(period: $period)
@@ -38,6 +32,7 @@ struct BodyView: View {
                             Theme.separator.frame(height: 4)
                             summaryTable
                             Theme.separator.frame(height: 4)
+                            composition
                             trend
                             Theme.separator.frame(height: 4)
                             analysis
@@ -256,9 +251,70 @@ struct BodyView: View {
         }
     }
 
+    /// Items only in the imported YUNMAI history (not in Health): latest, period average
+    /// and change, like the summary table. Hidden when the period has no imported data.
+    @ViewBuilder
+    private var composition: some View {
+        let recs = body_.imported.filter {
+            period.contains($0.date) && (source == nil || $0.source == source) && $0.hasExtras
+        }
+        if !recs.isEmpty {
+            let items: [(String, String, (BodyStore.Imported) -> Double?)] = [
+                ("Skeletal Muscle", "%", { $0.skeletalMuscle }),
+                ("Body Water", "%", { $0.water }),
+                ("Protein", "%", { $0.protein }),
+                ("Visceral Fat", "", { $0.visceralFat }),
+                ("Bone Mass", "%", { $0.bonePercent }),
+                ("BMR", "kcal", { $0.bmr }),
+                ("Body Age", "", { $0.bodyAge }),
+                ("Fat Mass", "kg", { $0.fatMass }),
+            ]
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("COMPOSITION").font(.title3).foregroundStyle(Theme.label)
+                    Text("· YUNMAI import").font(.caption).foregroundStyle(Theme.secondaryText)
+                    Spacer()
+                }
+                .padding(12)
+                Grid(horizontalSpacing: 1, verticalSpacing: 1) {
+                    GridRow {
+                        Theme.cellHeader.frame(height: 32)
+                        ForEach(["LATEST", "AVG", "CHANGE"], id: \.self) { h in
+                            Text(h).font(.caption).foregroundStyle(Theme.label)
+                                .frame(maxWidth: .infinity, minHeight: 32).background(Theme.cellHeader)
+                        }
+                    }
+                    ForEach(items.indices, id: \.self) { i in
+                        let name = items[i].0
+                        let unit = items[i].1
+                        let v = recs.compactMap(items[i].2)
+                        let avg: Double? = v.isEmpty ? nil : v.reduce(0, +) / Double(v.count)
+                        let change: Double? = v.count >= 2 ? v.last! - v.first! : nil
+                        let decimals = (name == "BMR" || name == "Visceral Fat" || name == "Body Age") ? 0 : 1
+                        GridRow {
+                            Text(name).font(.caption).foregroundStyle(Theme.label)
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                                .frame(maxWidth: .infinity, minHeight: 40).background(Theme.cellHeader)
+                            cell(compFmt(v.last, decimals), unit)
+                            cell(compFmt(avg, decimals), unit)
+                            cell(change.map { ($0 > 0 ? "+" : "") + (compFmt($0, decimals) ?? "") },
+                                 unit == "%" ? "%p" : unit)
+                        }
+                    }
+                }
+                .background(Theme.gridLine)
+            }
+            Theme.separator.frame(height: 4)
+        }
+    }
+
+    private func compFmt(_ x: Double?, _ decimals: Int) -> String? {
+        x.map { String(format: "%.\(decimals)f", $0) }
+    }
+
     /// Weigh-ins of the period, newest first (first 10, then "Show all").
     private var history: some View {
-        let all = WeightHistoryList.measurements(from: body_.samples)
+        let all = WeightHistoryList.measurements(from: body_.samples, extra: body_.extra(at:))
             .filter { period.contains($0.date) && (source == nil || $0.source == source) }
         let shown = showAllHistory ? all : Array(all.prefix(10))
         return VStack(alignment: .leading, spacing: 0) {
