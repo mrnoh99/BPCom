@@ -143,7 +143,11 @@ enum YunmaiImport {
             let ds = fields[dateCol].trimmingCharacters(in: .whitespaces)
             var date: Date?
             for fmt in formats where date == nil { f.dateFormat = fmt; date = f.date(from: ds) }
-            guard let date, let w = num("Weight") else { continue }
+            guard let date else { continue }
+            // Body_Data export marks weights estimated from lean mass + fat: don't keep those.
+            let estimated = col("Weight Estimated").map { $0 < fields.count && fields[$0].uppercased() == "YES" } ?? false
+            let w = estimated ? nil : num("Weight")
+            guard w != nil || num("BMI") != nil || num("Body Fat") != nil else { continue }
             rows.append(Row(date: date, weight: w, bmi: num("BMI"), bodyFat: num("Body Fat"),
                             leanMass: num("Lean Body Mass"), skeletalMuscle: num("Skeletal Muscle"),
                             muscle: num("Muscle (%)"), water: num("Body Water"), protein: num("Protein"),

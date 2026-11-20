@@ -267,3 +267,46 @@ enum CSVImporter {
         return parts.joined(separator: " ")
     }
 }
+
+// MARK: - Body data export
+
+extension CSV {
+    /// Every weigh-in shown in the app (Health + imported YUNMAI history), newest first,
+    /// with all items. Same columns as the YUNMAI CSV, so it can be imported again.
+    @MainActor
+    static func exportBody() -> (text: String, count: Int) {
+        let store = BodyStore.shared
+        let items = WeightHistoryList.measurements(from: store.samples, extra: store.extra(at:))
+        let heightByMinute = Dictionary(store.heights.map { (BodyStore.minute($0.date), $0.value) },
+                                        uniquingKeysWith: { a, _ in a })
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = .current
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+
+        func n(_ v: Double?, _ digits: Int = 1) -> String {
+            guard let v, v != 0 else { return "" }
+            return String(format: "%.\(digits)f", v)
+        }
+        func q(_ s: String) -> String { "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\"" }
+
+        let header = ["Date Time", "Weight (kg)", "BMI", "Body Fat (%)", "Fat Mass (kg)", "Lean Body Mass (kg)",
+                      "Skeletal Muscle (%)", "Muscle (%)", "Body Water (%)", "Protein (%)", "Visceral Fat (level)",
+                      "Bone Mass (kg)", "Bone Mass (%)", "BMR (kcal)", "Body Age", "Height (cm)", "Weight Estimated",
+                      "Source"]
+        var lines = [header.map(q).joined(separator: ",")]
+        for m in items {
+            let x = m.extra
+            let fatMass = m.weight.flatMap { w in m.bodyFat.map { w * $0 / 100 } }
+            let height = x?.height ?? heightByMinute[BodyStore.minute(m.date)]
+            let fields = [
+                f.string(from: m.date), n(m.weight, 2), n(m.bmi), n(m.bodyFat), n(fatMass), n(m.leanMass),
+                n(x?.skeletalMuscle), n(x?.muscle), n(x?.water), n(x?.protein), n(x?.visceralFat, 0),
+                n(x?.boneMass), n(x?.bonePercent), n(x?.bmr, 0), n(x?.bodyAge, 0), n(height),
+                m.weightEstimated ? "YES" : "", m.source,
+            ]
+            lines.append(fields.map(q).joined(separator: ","))
+        }
+        return (lines.joined(separator: "\n"), items.count)
+    }
+}
