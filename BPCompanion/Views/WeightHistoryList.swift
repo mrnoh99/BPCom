@@ -33,15 +33,16 @@ struct WeightHistoryList: View {
         Self.measurements(from: bodyStore.samples, extra: bodyStore.extra(at:))
     }
 
-    /// Joins the separate Health samples (weight, BMI, fat, lean) of one weigh-in by
-    /// source and minute, newest first. Also used by the Body tab's history.
+    /// Joins the separate samples (weight, BMI, fat, lean) of one weigh-in by minute —
+    /// not by app name, which differs for the same scale ("윈마이" in Health, "YUNMAI"
+    /// when imported) — newest first. Also used by the Body tab's history.
     static func measurements(from samples: [BodyStore.Metric: [BodyStore.Sample]],
                              extra: (Date) -> BodyStore.Imported? = { _ in nil }) -> [Measurement] {
         var byKey: [String: Measurement] = [:]
         for m in BodyStore.Metric.allCases {
             for s in samples[m] ?? [] {
                 let minute = Int(s.date.timeIntervalSince1970 / 60)
-                let key = "\(s.source)|\(minute)"
+                let key = "\(minute)"
                 var item = byKey[key] ?? Measurement(id: key, date: s.date, source: s.source)
                 switch m {
                 case .weight: item.weight = s.value; item.weightEstimated = s.estimated
