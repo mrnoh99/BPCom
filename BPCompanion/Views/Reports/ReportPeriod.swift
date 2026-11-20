@@ -1,7 +1,8 @@
 import Foundation
 
 enum PeriodKind: String, CaseIterable, Identifiable {
-    case day = "D", week = "W", month = "M", year = "Y", custom = "Custom"
+    /// `week` is a two-week window ("2W"): 14 days ending on the anchor day.
+    case day = "D", week = "2W", month = "M", year = "Y", custom = "Custom"
     var id: String { rawValue }
 }
 
@@ -33,7 +34,7 @@ struct ReportPeriod: Equatable {
         let end = cal.startOfDay(for: anchor)
         switch kind {
         case .day: return end
-        case .week: return cal.date(byAdding: .day, value: -6, to: end)!
+        case .week: return cal.date(byAdding: .day, value: -13, to: end)!   // 2W
         case .month: return cal.date(byAdding: .day, value: 1, to: cal.date(byAdding: .month, value: -1, to: end)!)!
         case .year: return cal.date(byAdding: .day, value: 1, to: cal.date(byAdding: .year, value: -1, to: end)!)!
         case .custom: return cal.startOfDay(for: min(customFrom, customTo))
@@ -57,14 +58,8 @@ struct ReportPeriod: Equatable {
     /// The window ends today (no need for the Today button).
     var endsToday: Bool { to == cal.startOfDay(for: .now) }
 
-    /// Reports open on the last 14 days including today (a Custom window: the arrows move
-    /// it by two weeks and Today brings it back).
-    static var lastTwoWeeks: ReportPeriod {
-        var p = ReportPeriod()
-        let today = Calendar.current.startOfDay(for: .now)
-        p.setCustom(from: Calendar.current.date(byAdding: .day, value: -13, to: today)!, to: today)
-        return p
-    }
+    /// Reports open on 2W: the last 14 days including today.
+    static var lastTwoWeeks: ReportPeriod { ReportPeriod(kind: .week) }
 
     /// Back to a window ending today, same length.
     mutating func goToToday() {
@@ -88,7 +83,7 @@ struct ReportPeriod: Equatable {
     mutating func shift(_ direction: Int) {
         switch kind {
         case .day: anchor = cal.date(byAdding: .day, value: direction, to: anchor)!
-        case .week: anchor = cal.date(byAdding: .day, value: 7 * direction, to: anchor)!
+        case .week: anchor = cal.date(byAdding: .day, value: 14 * direction, to: anchor)!
         case .month: anchor = cal.date(byAdding: .month, value: direction, to: anchor)!
         case .year: anchor = cal.date(byAdding: .year, value: direction, to: anchor)!
         case .custom:
