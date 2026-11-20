@@ -54,6 +54,28 @@ struct ReportPeriod: Equatable {
 
     var canGoForward: Bool { end <= cal.startOfDay(for: .now) }
 
+    /// The window ends today (no need for the Today button).
+    var endsToday: Bool { to == cal.startOfDay(for: .now) }
+
+    /// Back to a window ending today, same length.
+    mutating func goToToday() {
+        let today = cal.startOfDay(for: .now)
+        if kind == .custom {
+            let n = dayCount
+            customTo = today
+            customFrom = cal.date(byAdding: .day, value: -(n - 1), to: today)!
+        } else {
+            anchor = today
+        }
+    }
+
+    /// Custom window from the wheels or the Today / This Week / This Month buttons.
+    mutating func setCustom(from: Date, to: Date) {
+        kind = .custom
+        customFrom = cal.startOfDay(for: from)
+        customTo = cal.startOfDay(for: to)
+    }
+
     mutating func shift(_ direction: Int) {
         switch kind {
         case .day: anchor = cal.date(byAdding: .day, value: direction, to: anchor)!

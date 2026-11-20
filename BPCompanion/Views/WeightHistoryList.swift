@@ -35,7 +35,7 @@ struct WeightHistoryList: View {
 
     /// Joins the separate samples (weight, BMI, fat, lean) of one weigh-in by minute —
     /// not by app name, which differs for the same scale ("윈마이" in Health, "YUNMAI"
-    /// when imported) — newest first. Also used by the Body tab's history.
+    /// when imported) — newest first. Also used by the Weight report's history.
     static func measurements(from samples: [BodyStore.Metric: [BodyStore.Sample]],
                              extra: (Date) -> BodyStore.Imported? = { _ in nil }) -> [Measurement] {
         var byKey: [String: Measurement] = [:]

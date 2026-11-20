@@ -10,10 +10,10 @@
 |---|---|
 | **Home** | 제목 *BP companion of Jaisung NOH*. `LAST 10 READINGS` (SYSTOLIC / DIASTOLIC / HR / MAP / WEIGHT 의 MAX·MIN·AVG), `YOUR LAST READINGS`. 우상단 **+** 로 입력 |
 | **History** | 위쪽에서 **Blood Pressure / Weight** 전환. Weight = 건강 앱(YUNMAI)의 측정 기록을 월별로(체중·직전 대비 ▲▼, BMI·등급, 체지방률, 제지방량, 시간, 출처 앱; 읽기 전용). Blood Pressure = 월별 섹션(접기/펼치기), 날짜 아이콘, 수축기/이완기(단계별 색상), 맥박, MAP, 시간, 약 복용(💊) 표시. 연필 버튼 = 편집/삭제 모드, 행을 누르면 수정 |
-| **Reports** | 좌우 스와이프로 4페이지: **Summary**(MAX/MIN/AVG 표) · **Trend**(BP/HR 꺾은선 + 평균 점선) · **Range**(구간별 횟수·비율) · **Statistics**(Max/Avg/Min 막대). 상단 From/To 와 ‹ › 로 기간 이동, 하단 **D / W / M / Y / Custom**, **All / AM / PM** 필터, 📷 버튼 = 현재 페이지 이미지로 공유 |
+| **Reports** | 위쪽 **Blood Pressure / Weight** 전환. Blood Pressure = 좌우 스와이프로 4페이지: **Summary**(MAX/MIN/AVG 표) · **Trend**(BP/HR 꺾은선 + 평균 점선) · **Range**(구간별 횟수·비율) · **Statistics**(Max/Avg/Min 막대). 상단 From/To 와 ‹ › 로 기간 이동, 하단 **D / W / M / Y / Custom**(Custom은 휠로 날짜 선택 + **오늘 / 이번 주 / 이번 달** 빠른 선택), 오늘이 아닌 기간을 볼 때 **Today** 버튼으로 오늘로 복귀, **All / AM / PM** 필터, 📷 버튼 = 현재 페이지 이미지로 공유 |
 | **Settings** | 0. **Back Up All Data / Restore from Backup** (모든 자료를 **iCloud Drive › BPCompanion** 폴더(자동 생성, 파일 앱에서 보임)에 `BPCompanion_Backup_날짜_시간.json` 하나로 저장, 복원은 그 폴더의 백업 목록에서 선택 또는 다른 파일 선택 — 혈압 기록(메모·★ 포함), 윈마이 체성분 전체, 이름; 복원 시 중복 없이 합침) 1. **Export All Data (CSV)** (폴더 하나에 혈압 전체 `BloodPressure_Data_날짜.csv` + 체성분 전체 `Body_Data_날짜.csv`) 2. **Import (CSV)** (아래 Info 는 평소 접힘, 가져오기/내보내기 후 결과와 함께 펼쳐짐) 3. **iCloud Sync** 4. **Apple Health** 쓰기, 이름 변경 |
-| **Body** | 건강 앱에서 체중계 앱(YUNMAI 등)의 **체중·BMI·체지방률·제지방량·신장**을 읽어 혈압과 별도로 분석: 최근값 카드(BMI 등급, 신장), 기간별 MAX/MIN/AVG/변화 표, 항목별 추이 그래프(평균선), 변화 분석(체지방 감소·제지방 유지 등), 기간 내 측정 기록(최신순 10개 + Show all). 기간 선택(AM/PM 구분 없음), 앱별 출처 필터, 당겨서 새로고침 |
-| **+ Add Entry** | Basic(혈압/맥박 휠 ↔ 날짜·시간 휠, Drug 스위치. 새 기록은 최근 10분 이내 **Apple Watch 심박수**를 건강 앱에서 읽어 맥박에 자동 입력, ⌚ 버튼으로 다시 읽기, 휠을 돌리면 직접 입력) · Note(메모 + ★). 체중은 입력하지 않음 → Body 탭 |
+| **Reports › Weight** | 좌우 스와이프로 5페이지: **Body Summary**(최근값·BMI 등급·신장 + 기간 MAX/MIN/AVG/변화) · **Weight Trend**(항목별 그래프·평균선) · **Composition**(골격근·수분·단백질·내장지방·골량·BMR·신체 나이·지방무게) · **Analysis**(변화 해석) · **Weigh-ins**(기간 내 측정 기록). 출처 앱 필터, AM/PM 구분 없음 |
+| **+ Add Entry** | Basic(혈압/맥박 휠 ↔ 날짜·시간 휠, Drug 스위치. 새 기록은 최근 10분 이내 **Apple Watch 심박수**를 건강 앱에서 읽어 맥박에 자동 입력, ⌚ 버튼으로 다시 읽기, 휠을 돌리면 직접 입력) · Note(메모 + ★). 체중은 입력하지 않음 → Reports › Weight |
 
 혈압 색상 기준: 수축기 <90 저혈압(파랑) · 90–119 정상(초록) · 120–139 주의(주황) · ≥140 고혈압(빨강) / 이완기 <60 · 60–79 · 80–89 · ≥90.
 MAP = 이완기 + (수축기 − 이완기) / 3.
@@ -39,7 +39,7 @@ Settings 의 iCloud Sync 스위치 변경은 앱을 다시 실행해야 적용�
   - 혈압(수축기/이완기)과 심박수를 기록 시각 그대로 저장합니다(체중은 쓰지 않음). (약 복용·메모는 건강 앱에 해당 항목이 없어 저장하지 않습니다.)
 - 켜 둔 동안 새로 추가·수정·삭제·가져오기 한 기록은 건강 앱에도 자동 반영됩니다.
   다른 기기에서 iCloud로 넘어온 기록은 **Send All Readings to Health** 로 보낼 수 있습니다(중복되지 않음 — 기록마다 고유 동기화 ID 사용).
-- **체성분 읽기 (YUNMAI 등)**: Settings › Apple Health › **Read Body Data** (기본 켜짐). YUNMAI 앱이 건강 앱에 넣은 체중·BMI·체지방률·제지방량·신장을 읽어 **Body 탭**에서 혈압과 따로 분석합니다. 혈압 기록에 체중을 붙이거나 앱에서 체중을 입력하지 않습니다.
+- **체성분 읽기 (YUNMAI 등)**: Settings › Apple Health › **Read Body Data** (기본 켜짐). YUNMAI 앱이 건강 앱에 넣은 체중·BMI·체지방률·제지방량·신장을 읽어 **Reports › Weight**에서 혈압과 따로 분석합니다. 혈압 기록에 체중을 붙이거나 앱에서 체중을 입력하지 않습니다.
   - YUNMAI 앱에서 건강 앱 연동을 켜야 합니다(Me › Connect to Health).
   - 앱이 열려 있는 동안 새 측정값이 들어오면 자동으로 다시 읽습니다. Home의 "YOUR LAST READINGS"에는 최근 체중이 함께 표시됩니다.
   - 예전 혈압 앱 **"BP"** 가 건강 앱에 넣은 체중(매 기록마다 같은 값)은 기본으로 제외합니다. Settings › Apple Health › **Body Data Sources** 에서 앱별로 켜고 끌 수 있습니다. 이 선택은 iCloud Sync가 켜져 있으면 iCloud 키-값 저장소로 iPhone·iPad에 같게 맞춰집니다. (다른 앱이 쓴 건강 자료는 iOS 제한으로 이 앱에서 지울 수 없음 — 지우려면 건강 앱 › 체중 › 데이터 소스 및 접근 › BP › 데이터 삭제)
@@ -48,7 +48,7 @@ Settings 의 iCloud Sync 스위치 변경은 앱을 다시 실행해야 적용�
   - 같은 측정 시각(분)은 하나로 합치며, 다시 가져오면 새 측정만 추가하고 빈 항목만 채웁니다. 건강 앱에 같은 측정이 있으면 건강 앱 값을 씁니다.
   - 새 측정은 평소처럼 윈마이 → 건강 앱으로 자동으로 들어오고(체중·BMI·체지방률·제지방량·신장), 골격근 등 나머지 항목은 가끔 iMazing으로 다시 꺼내 가져오면 채워집니다.
   - Settings › Apple Health › **Send All to Health**: 혈압 기록과 함께 가져온 윈마이 기록 중 건강 앱에 없는 측정의 체중·BMI·체지방률·제지방량·신장을 원래 날짜로 씁니다(출처: BP Companion, 다시 눌러도 중복 없음). 보내기 전에 필요한 쓰기 권한을 모두 요청하고, 허용되지 않은 항목은 건너뛴 뒤 이름을 알려 줍니다. 골격근 등은 건강 앱에 항목이 없어 앱 안에서만 표시됩니다.
-  - History › Weight 각 줄과 Body 탭 **COMPOSITION** 표에 골격근·수분·단백질·내장지방·골량(%)·기초대사량·신체 나이·지방무게가 표시됩니다.
+  - History › Weight 각 줄과 Reports › Weight **COMPOSITION** 표에 골격근·수분·단백질·내장지방·골량(%)·기초대사량·신체 나이·지방무게가 표시됩니다.
   - BMI 등급은 대한비만학회 기준(정상 18.5–22.9, 과체중 23–24.9, 비만 25 이상)입니다.
 - 기본으로 켜져 있어 **iPhone/iPad에서 처음 실행할 때 건강 권한 창**이 뜹니다. 권한을 한 번 요청해야
   건강 앱 › 공유 › 앱 및 각 항목의 **데이터 소스**에 BP Companion 이 나타납니다.
