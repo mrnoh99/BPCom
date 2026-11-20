@@ -15,6 +15,8 @@ struct SettingsView: View {
     @State private var exportDoc: ExportDocument?
     @State private var exportSummary = ""
     @State private var exportName = ""
+    /// Backups found in iCloud Drive › BPCompanion (newest first).
+    @State private var cloudBackups: [URL] = []
     @State private var showExporter = false
     @State private var showImporter = false
     /// One file picker for both imports (two .fileImporter modifiers on one view conflict).
@@ -55,9 +57,22 @@ struct SettingsView: View {
                     }
                     .disabled(readings.isEmpty && bodyStore.importedCount == 0)
 
-                    Button {
-                        importKind = .backup
-                        showImporter = true
+                    Menu {
+                        if cloudBackups.isEmpty {
+                            Text("No backups in iCloud Drive › BPCompanion")
+                        } else {
+                            Section("iCloud Drive › BPCompanion") {
+                                ForEach(cloudBackups.prefix(10), id: \.self) { url in
+                                    Button(url.deletingPathExtension().lastPathComponent) {
+                                        Task { await restoreFromCloud(url) }
+                                    }
+                                }
+                            }
+                        }
+                        Button("Choose Another File…") {
+                            importKind = .backup
+                            showImporter = true
+                        }
                     } label: {
                         Label("Restore from Backup", systemImage: "arrow.counterclockwise")
                     }
@@ -294,6 +309,7 @@ struct SettingsView: View {
                 }
             }
             // Opening Settings again starts with the info collapsed.
+            .task { cloudBackups = await BackupFolder.list() }
             .onDisappear {
                 dataInfoExpanded = false
                 dataResult = nil
@@ -353,17 +369,42 @@ struct SettingsView: View {
 
     /// One JSON file with everything (readings incl. notes and stars, body records, name),
     /// for restoring after reinstalling or on a new device.
+    /// Saves straight into iCloud Drive › BPCompanion (folder made if missing). If iCloud
+    /// Drive is not available, lets the user choose where to save instead.
     private func prepareBackup() {
-        do {
-            let b = try Backup.make(context: context)
-            exportDoc = ExportDocument(.backup(b.data))
-            exportName = "BPCompanion_Backup_\(Self.fileDate.string(from: .now))"
-            exportSummary = "Backed up \(b.readings) blood pressure readings and \(b.body) weigh-ins."
-            showExporter = true
-        } catch {
-            showDataResult("Backup failed: \(error.localizedDescription)", error: true)
+        Task {
+            do {
+                let b = try Backup.make(context: context)
+                let name = "BPCompanion_Backup_\(Self.backupStamp.string(from: .now))"
+                let summary = "Backed up \(b.readings) blood pressure readings and \(b.body) weigh-ins"
+                do {
+                    let url = try await BackupFolder.save(b.data, name: name)
+                    showDataResult("\(summary) to iCloud Drive › BPCompanion › \(url.lastPathComponent).")
+                    cloudBackups = await BackupFolder.list()
+                } catch {
+                    exportDoc = ExportDocument(.backup(b.data))
+                    exportName = name
+                    exportSummary = summary + ". (\(error.localizedDescription))"
+                    showExporter = true
+                }
+            } catch {
+                showDataResult("Backup failed: \(error.localizedDescription)", error: true)
+            }
         }
     }
+
+    private func restoreFromCloud(_ url: URL) async {
+        await BackupFolder.download(url)
+        restoreBackup(url)
+    }
+
+    /// yyyyMMdd_HHmm so several backups a day don't overwrite each other.
+    private static let backupStamp: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyyMMdd_HHmm"
+        return f
+    }()
 
     private func restoreBackup(_ url: URL) {
         do {

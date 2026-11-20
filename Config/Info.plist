@@ -17,6 +17,18 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.com.jaisungnoh.BPCompanion</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>BPCompanion</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>BP Companion saves your blood pressure and heart rate readings to the Health app, and — when you ask — your imported YUNMAI weight history (weight, BMI, body fat, lean body mass, height).</string>
 	<key>NSHealthShareUsageDescription</key>

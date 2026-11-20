@@ -154,6 +154,66 @@ enum Backup {
     }
 }
 
+/// The app's own folder in iCloud Drive ("iCloud Drive › BPCompanion"), created
+/// automatically and visible in the Files app. Backups are saved here directly.
+enum BackupFolder {
+    enum FolderError: LocalizedError {
+        case iCloudUnavailable
+        var errorDescription: String? {
+            "iCloud Drive is not available. Sign in to iCloud and turn on iCloud Drive for BP Companion in Settings › [your name] › iCloud."
+        }
+    }
+
+    /// iCloud Drive › BPCompanion (the container's Documents folder). Created if missing.
+    /// Looked up off the main thread, as Apple requires.
+    static func url() async -> URL? {
+        let id = CloudSyncMonitor.containerID
+        return await Task.detached {
+            guard let root = FileManager.default.url(forUbiquityContainerIdentifier: id) else { return nil }
+            let docs = root.appendingPathComponent("Documents", isDirectory: true)
+            try? FileManager.default.createDirectory(at: docs, withIntermediateDirectories: true)
+            return docs
+        }.value
+    }
+
+    /// Writes the backup into iCloud Drive › BPCompanion and returns its URL.
+    static func save(_ data: Data, name: String) async throws -> URL {
+        guard let dir = await url() else { throw FolderError.iCloudUnavailable }
+        let file = dir.appendingPathComponent(name).appendingPathExtension("json")
+        var coordError: NSError?
+        var writeError: Error?
+        NSFileCoordinator().coordinate(writingItemAt: file, options: .forReplacing, error: &coordError) { u in
+            do { try data.write(to: u, options: .atomic) } catch { writeError = error }
+        }
+        if let e = coordError ?? writeError { throw e }
+        return file
+    }
+
+    /// Backups in the folder, newest first (also ones still only in iCloud).
+    static func list() async -> [URL] {
+        guard let dir = await url() else { return [] }
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        let files = names.compactMap { name -> URL? in
+            // Not yet downloaded: ".BPCompanion_Backup_x.json.icloud"
+            var n = name
+            if n.hasPrefix("."), n.hasSuffix(".icloud") { n = String(n.dropFirst().dropLast(7)) }
+            guard n.hasPrefix("BPCompanion_Backup"), n.hasSuffix(".json") else { return nil }
+            return dir.appendingPathComponent(n)
+        }
+        return Array(Set(files)).sorted { $0.lastPathComponent > $1.lastPathComponent }
+    }
+
+    /// Makes sure an iCloud file is on this device before reading it (waits up to ~15 s).
+    static func download(_ file: URL) async {
+        if FileManager.default.fileExists(atPath: file.path) { return }
+        try? FileManager.default.startDownloadingUbiquitousItem(at: file)
+        for _ in 0..<30 {
+            if FileManager.default.fileExists(atPath: file.path) { return }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+    }
+}
+
 /// What Settings › Data saves: the backup (.json) or the CSV folder.
 struct ExportDocument: FileDocument {
     enum Content {
