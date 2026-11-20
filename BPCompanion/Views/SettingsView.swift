@@ -12,7 +12,8 @@ struct SettingsView: View {
     /// Value of the toggle when the app was launched (the store is configured at launch).
     @State private var launchICloudSync = UserDefaults.standard.object(forKey: SettingsKey.iCloudSync) as? Bool ?? true
 
-    @State private var exportDoc: CSVDocument?
+    @State private var exportDoc: ExportFolder?
+    @State private var exportSummary = ""
     @State private var showExporter = false
     @State private var showImporter = false
     /// One file picker for both imports (two .fileImporter modifiers on one view conflict).
@@ -47,12 +48,11 @@ struct SettingsView: View {
 
                 Section {
                     Button {
-                        exportDoc = CSVDocument(text: CSV.export(readings))
-                        showExporter = true
+                        Task { await prepareExport() }
                     } label: {
-                        Label("Export (CSV)", systemImage: "square.and.arrow.up")
+                        Label("Export All Data (CSV)", systemImage: "square.and.arrow.up")
                     }
-                    .disabled(readings.isEmpty)
+                    .disabled(readings.isEmpty && !bodyStore.hasAnyData)
 
                     Button {
                         importKind = .bp
@@ -257,10 +257,10 @@ struct SettingsView: View {
             .orangeNavigationBar()
             .fileExporter(isPresented: $showExporter,
                           document: exportDoc,
-                          contentType: .commaSeparatedText,
-                          defaultFilename: "BloodPressure_Data_\(Self.fileDate.string(from: .now))") { result in
+                          contentType: .folder,
+                          defaultFilename: "BPCompanion_Export_\(Self.fileDate.string(from: .now))") { result in
                 switch result {
-                case .success: showDataResult("Exported \(readings.count) readings.")
+                case .success: showDataResult(exportSummary)
                 case .failure(let error): showDataResult("Export failed: \(error.localizedDescription)", error: true)
                 }
             }
@@ -315,6 +315,20 @@ struct SettingsView: View {
         } catch {
             showDataResult("Import failed: \(error.localizedDescription)", error: true)
         }
+    }
+
+    /// Everything recorded so far: all blood pressure readings (BloodPressure_Data format)
+    /// and all body data (imported YUNMAI history + Health), in one folder.
+    private func prepareExport() async {
+        await bodyStore.refresh()
+        let day = Self.fileDate.string(from: .now)
+        let body = CSV.exportBody()
+        exportDoc = ExportFolder(files: [
+            "BloodPressure_Data_\(day).csv": CSV.export(readings),
+            "Body_Data_\(day).csv": body.text,
+        ])
+        exportSummary = "Exported \(readings.count) blood pressure readings and \(body.count) weigh-ins."
+        showExporter = true
     }
 
     private func importYunmai(_ url: URL) {
