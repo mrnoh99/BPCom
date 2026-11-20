@@ -273,9 +273,10 @@ struct CustomRangeSheet: View {
             Form {
                 Section {
                     HStack(spacing: 8) {
-                        quick("Today", cal.startOfDay(for: .now))
-                        quick("This Week", cal.dateInterval(of: .weekOfYear, for: .now)?.start ?? .now)
+                        // Two weeks = the last 14 days including today.
+                        quick("This 2 Weeks", cal.date(byAdding: .day, value: -13, to: cal.startOfDay(for: .now)) ?? .now)
                         quick("This Month", cal.dateInterval(of: .month, for: .now)?.start ?? .now)
+                        quick("This Year", cal.dateInterval(of: .year, for: .now)?.start ?? .now)
                     }
                     .listRowBackground(Color.clear)
                 }
@@ -310,7 +311,7 @@ struct CustomRangeSheet: View {
         }
     }
 
-    /// Today / This Week / This Month: start of that period up to today, applied at once.
+    /// This 2 Weeks / This Month / This Year: start of that period up to today, applied at once.
     private func quick(_ title: String, _ start: Date) -> some View {
         Button {
             period.setCustom(from: start, to: .now)

@@ -69,7 +69,7 @@ struct ReportPeriod: Equatable {
         }
     }
 
-    /// Custom window from the wheels or the Today / This Week / This Month buttons.
+    /// Custom window from the wheels or the This 2 Weeks / This Month / This Year buttons.
     mutating func setCustom(from: Date, to: Date) {
         kind = .custom
         customFrom = cal.startOfDay(for: from)
