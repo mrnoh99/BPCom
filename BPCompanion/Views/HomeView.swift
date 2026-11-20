@@ -19,6 +19,12 @@ struct HomeView: View {
                     SectionTitle("YOUR LAST READINGS")
                     lastReading
 
+                    if let m = lastWeighIn {
+                        Theme.separator.frame(height: 18)
+                        SectionTitle("YOUR LAST WEIGH-IN")
+                        weighIn(m)
+                    }
+
                     Text(AppInfo.credit)
                         .font(.caption2)
                         .foregroundStyle(Theme.secondaryText.opacity(0.7))
@@ -28,6 +34,8 @@ struct HomeView: View {
                 .readableWidth()
             }
             .background(Theme.background)
+            .task { await bodyStore.refresh() }
+            .refreshable { await bodyStore.refresh() }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) { title }
@@ -63,10 +71,6 @@ struct HomeView: View {
                 lastRow("SYSTOLIC/DIASTOLIC:", "\(r.systolic)/\(r.diastolic) mmHg")
                 lastRow("HEART RATE:", "\(r.pulse) bpm")
                 lastRow("MAP:", "\(Fmt.int(r.map)) mmHg")
-                if let w = bodyStore.latest(.weight) {
-                    // From Apple Health (e.g. the YUNMAI scale), independent of BP readings.
-                    lastRow("WEIGHT:", "\(Fmt.weight(w.value)) kg · \(w.date.formatted(.dateTime.month().day()))")
-                }
                 lastRow("DATE:", Fmt.dateTime(r.date))
             }
             .background(Theme.gridLine)
@@ -81,6 +85,29 @@ struct HomeView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)
         }
+    }
+
+    /// Newest weigh-in from Apple Health (e.g. the YUNMAI scale) and the imported history.
+    private var lastWeighIn: WeightHistoryList.Measurement? {
+        WeightHistoryList.measurements(from: bodyStore.samples, extra: bodyStore.extra(at:)).first
+    }
+
+    private func weighIn(_ m: WeightHistoryList.Measurement) -> some View {
+        VStack(spacing: 1) {
+            if let w = m.weight {
+                let change = m.change.map { abs($0) >= 0.05 ? String(format: "  (%@%.1f)", $0 > 0 ? "▲" : "▼", abs($0)) : "" } ?? ""
+                lastRow("WEIGHT:", (m.weightEstimated ? "≈" : "") + "\(Fmt.weight(w)) kg" + change)
+            }
+            if let bmi = m.bmi {
+                lastRow("BMI:", String(format: "%.1f · ", bmi) + BodyStore.bmiCategory(bmi).0)
+            }
+            if let f = m.bodyFat { lastRow("BODY FAT:", String(format: "%.1f %%", f)) }
+            if let l = m.leanMass { lastRow("LEAN MASS:", String(format: "%.1f kg", l)) }
+            if let s = m.extra?.skeletalMuscle { lastRow("SKELETAL MUSCLE:", String(format: "%.1f %%", s)) }
+            if let v = m.extra?.visceralFat { lastRow("VISCERAL FAT:", String(format: "%.0f", v)) }
+            lastRow("DATE:", "\(Fmt.dateTime(m.date)) · \(m.source)")
+        }
+        .background(Theme.gridLine)
     }
 
     private func lastRow(_ label: String, _ value: String) -> some View {
