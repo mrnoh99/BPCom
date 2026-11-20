@@ -236,6 +236,51 @@ final class HealthSync: ObservableObject {
         accessChecked += 1
     }
 
+    // MARK: Apple Watch heart rate
+
+    struct WatchPulse {
+        let bpm: Int
+        let date: Date
+    }
+
+    /// Latest heart rate measured by an Apple Watch within the last `minutes` (from Health).
+    /// Values written by BP Companion or other apps (e.g. the old BP app) are ignored.
+    /// The first call asks for read access to Heart Rate.
+    func latestWatchPulse(within minutes: Int = 10) async -> WatchPulse? {
+        guard isAvailable else { return nil }
+        let type = HKQuantityType(.heartRate)
+        if !UserDefaults.standard.bool(forKey: Self.heartRateReadRequestedKey) {
+            let ok: Bool = await withCheckedContinuation { c in
+                store.requestAuthorization(toShare: nil, read: [type]) { success, _ in c.resume(returning: success) }
+            }
+            if ok { UserDefaults.standard.set(true, forKey: Self.heartRateReadRequestedKey) }
+        }
+        let since = Date().addingTimeInterval(-Double(minutes) * 60)
+        let predicate = HKQuery.predicateForSamples(withStart: since, end: nil, options: [])
+        let sort = [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]
+        let found: [HKSample] = await withCheckedContinuation { c in
+            let q = HKSampleQuery(sampleType: type, predicate: predicate, limit: 50,
+                                  sortDescriptors: sort) { _, s, _ in c.resume(returning: s ?? []) }
+            store.execute(q)
+        }
+        for s in found {
+            guard let q = s as? HKQuantitySample, !BodyStore.isFromBPCompanion(q),
+                  Self.isFromAppleWatch(q) else { continue }
+            let bpm = q.quantity.doubleValue(for: .count().unitDivided(by: .minute()))
+            return WatchPulse(bpm: Int(bpm.rounded()), date: q.endDate)
+        }
+        return nil
+    }
+
+    static let heartRateReadRequestedKey = "healthHeartRateReadRequested"
+
+    /// Heart rate recorded by an Apple Watch (device model "Watch", or a Watch product type).
+    static func isFromAppleWatch(_ s: HKSample) -> Bool {
+        if s.device?.model?.localizedCaseInsensitiveContains("watch") == true { return true }
+        if s.sourceRevision.productType?.hasPrefix("Watch") == true { return true }
+        return false
+    }
+
     // MARK: Imported YUNMAI history → Health
 
     /// Writes imported YUNMAI weigh-ins to Health (weight, BMI, body fat, lean mass, height)
