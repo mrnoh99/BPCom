@@ -34,8 +34,10 @@ struct RootView: View {
         }
         .toolbarBackground(Theme.tabBar, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
+        .onAppear { BodyStore.shared.attach(context) }
         .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active {
+                BodyStore.shared.attach(context)
                 Task { await HealthSync.shared.onBecameActive(context) }
             }
         }
@@ -51,7 +53,12 @@ struct RootView: View {
                             presenting: pendingImport) { url in
             Button("Import") {
                 do {
-                    importMessage = try CSVImporter.importFile(at: url, into: context)
+                    if YunmaiImport.looksLikeYunmaiFile(url) {
+                        importMessage = try YunmaiImport.importFile(at: url, into: context).message
+                        Task { await BodyStore.shared.refresh() }
+                    } else {
+                        importMessage = try CSVImporter.importFile(at: url, into: context)
+                    }
                     tab = 1
                 } catch {
                     importMessage = "Import failed: \(error.localizedDescription)"

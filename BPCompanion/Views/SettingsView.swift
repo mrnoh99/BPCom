@@ -15,6 +15,10 @@ struct SettingsView: View {
     @State private var exportDoc: CSVDocument?
     @State private var showExporter = false
     @State private var showImporter = false
+    /// One file picker for both imports (two .fileImporter modifiers on one view conflict).
+    private enum ImportKind { case bp, yunmai }
+    @State private var importKind: ImportKind = .bp
+    @State private var confirmDeleteImported = false
     /// Info under Export/Import: collapsed whenever Settings opens, expanded after an import/export.
     @State private var dataInfoExpanded = false
     @State private var dataResult: String?
@@ -51,9 +55,36 @@ struct SettingsView: View {
                     .disabled(readings.isEmpty)
 
                     Button {
+                        importKind = .bp
                         showImporter = true
                     } label: {
                         Label("Import (CSV)", systemImage: "square.and.arrow.down")
+                    }
+
+                    Button {
+                        importKind = .yunmai
+                        showImporter = true
+                    } label: {
+                        Label("Import YUNMAI Data (.imazingapp / CSV)", systemImage: "scalemass")
+                    }
+                    if bodyStore.importedCount > 0 {
+                        Button(role: .destructive) {
+                            confirmDeleteImported = true
+                        } label: {
+                            Label("Delete Imported YUNMAI Data (\(bodyStore.importedCount))", systemImage: "trash")
+                        }
+                        .confirmationDialog("Delete all imported YUNMAI weigh-ins?",
+                                            isPresented: $confirmDeleteImported, titleVisibility: .visible) {
+                            Button("Delete", role: .destructive) {
+                                Task {
+                                    await bodyStore.deleteImported()
+                                    showDataResult("Deleted the imported YUNMAI data.")
+                                }
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("Only the history imported into BP Companion is removed (also on your other devices). Health data and the YUNMAI app are not touched.")
+                        }
                     }
 
                     DisclosureGroup(isExpanded: $dataInfoExpanded) {
@@ -234,9 +265,12 @@ struct SettingsView: View {
                 }
             }
             .fileImporter(isPresented: $showImporter,
-                          allowedContentTypes: [.commaSeparatedText, .plainText, .text]) { result in
+                          allowedContentTypes: importKind == .bp
+                            ? [.commaSeparatedText, .plainText, .text]
+                            : [.item]) { result in
                 switch result {
-                case .success(let url): importCSV(url)
+                case .success(let url):
+                    if importKind == .yunmai { importYunmai(url) } else { importCSV(url) }
                 case .failure(let error): showDataResult("Import failed: \(error.localizedDescription)", error: true)
                 }
             }
@@ -280,6 +314,16 @@ struct SettingsView: View {
             showDataResult(try CSVImporter.importFile(at: url, into: context))
         } catch {
             showDataResult("Import failed: \(error.localizedDescription)", error: true)
+        }
+    }
+
+    private func importYunmai(_ url: URL) {
+        do {
+            let r = try YunmaiImport.importFile(at: url, into: context)
+            showDataResult(r.message)
+            Task { await bodyStore.refresh() }
+        } catch {
+            showDataResult("YUNMAI import failed: \(error.localizedDescription)", error: true)
         }
     }
 

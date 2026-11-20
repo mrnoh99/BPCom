@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// History › Weight: every weigh-in from Apple Health (e.g. the YUNMAI scale), newest first,
-/// grouped by month. Read-only — the data belongs to the scale app.
+/// History › Weight: every weigh-in from Apple Health (e.g. the YUNMAI scale) and from the
+/// imported YUNMAI history, newest first, grouped by month. Read-only.
 struct WeightHistoryList: View {
     @ObservedObject private var bodyStore = BodyStore.shared
     @AppStorage(SettingsKey.healthReadBody) private var readBody = true
@@ -19,6 +19,8 @@ struct WeightHistoryList: View {
         var leanMass: Double?
         /// Weight change from the previous weigh-in (kg).
         var change: Double?
+        /// Imported YUNMAI record of the same minute (skeletal muscle, water, …).
+        var extra: BodyStore.Imported?
     }
 
     private struct MonthSection: Identifiable {
@@ -27,11 +29,14 @@ struct WeightHistoryList: View {
         let items: [Measurement]
     }
 
-    private var measurements: [Measurement] { Self.measurements(from: bodyStore.samples) }
+    private var measurements: [Measurement] {
+        Self.measurements(from: bodyStore.samples, extra: bodyStore.extra(at:))
+    }
 
     /// Joins the separate Health samples (weight, BMI, fat, lean) of one weigh-in by
     /// source and minute, newest first. Also used by the Body tab's history.
-    static func measurements(from samples: [BodyStore.Metric: [BodyStore.Sample]]) -> [Measurement] {
+    static func measurements(from samples: [BodyStore.Metric: [BodyStore.Sample]],
+                             extra: (Date) -> BodyStore.Imported? = { _ in nil }) -> [Measurement] {
         var byKey: [String: Measurement] = [:]
         for m in BodyStore.Metric.allCases {
             for s in samples[m] ?? [] {
@@ -48,6 +53,7 @@ struct WeightHistoryList: View {
             }
         }
         var list = byKey.values.sorted { $0.date < $1.date }
+        for i in list.indices { list[i].extra = extra(list[i].date) }
         var previous: Double?
         for i in list.indices {
             if let w = list[i].weight {
@@ -77,12 +83,7 @@ struct WeightHistoryList: View {
 
     var body: some View {
         Group {
-            if !bodyStore.isAvailable {
-                empty("Health Not Available",
-                      "Apple Health is not available on this device. Open BP Companion on iPhone to see your weight history.")
-            } else if !readBody {
-                empty("Body Data Is Off", "Turn on Settings › Apple Health › Read Body Data.")
-            } else if bodyStore.loaded && measurements.isEmpty {
+            if bodyStore.loaded && measurements.isEmpty {
                 BodyEmptyState()
             } else {
                 list
@@ -172,6 +173,9 @@ struct WeightRow: View {
                     value("Fat", m.bodyFat, "%")
                 }
                 value("Lean", m.leanMass, " kg")
+                if let x = m.extra, x.hasExtras {
+                    ExtraLine(x: x)
+                }
             }
             .foregroundStyle(Theme.primaryText)
 
@@ -269,6 +273,13 @@ struct BodyEmptyState: View {
                         .buttonStyle(.borderedProminent)
                         .tint(Theme.orange)
                 }
+            } else if !bodyStore.isAvailable || !UserDefaults.standard.bool(forKey: SettingsKey.healthReadBody) {
+                Text("No Body Data on This Device").font(.title3.bold())
+                Text(bodyStore.isAvailable
+                     ? "Read Body Data is off (Settings › Apple Health). You can also import your YUNMAI history in Settings › Data › Import YUNMAI Data — it syncs to your other devices through iCloud."
+                     : "Apple Health is not on this device. Import your YUNMAI history in Settings › Data › Import YUNMAI Data (on any device) — it syncs here through iCloud.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Theme.secondaryText)
             } else {
                 Text("No Body Data Readable").font(.title3.bold())
                 Text("BP Companion can't read weight, BMI or body fat on this device. Read access is set separately on each device, and iPad gets YUNMAI data from iPhone through iCloud (Settings › [your name] › iCloud › Health on both).")
@@ -302,5 +313,27 @@ struct BodyEmptyState: View {
         .padding(24)
         .frame(maxWidth: 560)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Items YUNMAI records but does not send to Health (from the imported history).
+struct ExtraLine: View {
+    let x: BodyStore.Imported
+
+    var body: some View {
+        let parts: [String] = [
+            x.skeletalMuscle.map { String(format: "Skeletal %.1f%%", $0) },
+            x.water.map { String(format: "Water %.1f%%", $0) },
+            x.protein.map { String(format: "Protein %.1f%%", $0) },
+            x.visceralFat.map { String(format: "Visceral %.0f", $0) },
+            x.bonePercent.map { String(format: "Bone %.1f%%", $0) },
+            x.bmr.map { String(format: "BMR %.0f", $0) },
+            x.bodyAge.map { String(format: "Age %.0f", $0) },
+            x.fatMass.map { String(format: "Fat mass %.1f kg", $0) },
+        ].compactMap { $0 }
+        return Text(parts.joined(separator: " · "))
+            .font(.caption)
+            .foregroundStyle(Theme.secondaryText)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }

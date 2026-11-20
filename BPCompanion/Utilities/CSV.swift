@@ -164,7 +164,7 @@ enum CSV {
     }
 
     /// RFC 4180 style record splitter (handles quotes, escaped quotes, newlines in quotes).
-    private static func records(_ text: String) -> [[String]] {
+    static func records(_ text: String) -> [[String]] {
         var result: [[String]] = []
         var row: [String] = []
         var field = ""
