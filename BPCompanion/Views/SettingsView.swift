@@ -29,7 +29,6 @@ struct SettingsView: View {
     @StateObject private var health = HealthSync.shared
     @Environment(\.openURL) private var openURL
     @State private var healthResult: String?
-    @State private var confirmSendImported = false
     @ObservedObject private var bodyStore = BodyStore.shared
 
     @EnvironmentObject private var sync: CloudSyncMonitor
@@ -124,12 +123,12 @@ struct SettingsView: View {
                                 sendAllToHealth()
                             } label: {
                                 HStack {
-                                    Label("Send All Readings to Health", systemImage: "arrow.up.heart")
+                                    Label("Send All to Health", systemImage: "arrow.up.heart")
                                     Spacer()
                                     if health.busy { ProgressView() }
                                 }
                             }
-                            .disabled(readings.isEmpty || health.busy)
+                            .disabled((readings.isEmpty && bodyStore.importedCount == 0) || health.busy)
                         }
                         HStack {
                             Text("Health Access")
@@ -162,25 +161,6 @@ struct SettingsView: View {
                         .onChange(of: healthReadBody) { _, on in
                             if on { Task { try? await health.requestAuthorization(); await BodyStore.shared.refresh() } }
                         }
-                        if bodyStore.importedCount > 0 {
-                            Button {
-                                confirmSendImported = true
-                            } label: {
-                                HStack {
-                                    Label("Send Imported YUNMAI Data to Health", systemImage: "arrow.up.heart")
-                                    Spacer()
-                                    if health.busy { ProgressView() }
-                                }
-                            }
-                            .disabled(health.busy)
-                            .confirmationDialog("Send \(bodyStore.importedCount) imported weigh-ins to Health?",
-                                                isPresented: $confirmSendImported, titleVisibility: .visible) {
-                                Button("Send") { sendImportedToHealth() }
-                                Button("Cancel", role: .cancel) {}
-                            } message: {
-                                Text("Weight, BMI, body fat, lean mass and height are written with their original dates, only for weigh-ins Health doesn't already have. They appear in Health with BP Companion as the source.")
-                            }
-                        }
                         if healthReadBody && !bodyStore.allSources.isEmpty {
                             DisclosureGroup("Body Data Sources") {
                                 ForEach(bodyStore.allSources, id: \.self) { name in
@@ -202,7 +182,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Apple Health")
                     } footer: {
-                        Text("Write: blood pressure and heart rate are saved to the Health app; new, edited and deleted readings are updated automatically. Read Body Data: weight, BMI, body fat and lean body mass from your scale app (e.g. YUNMAI) are shown and analysed in the Body tab. Allow access in Health › Sharing › Apps › BP Companion.")
+                        Text("Write: blood pressure and heart rate are saved to the Health app; new, edited and deleted readings are updated automatically. Send All to Health also sends the imported YUNMAI history (weight, BMI, body fat, lean mass, height) for weigh-ins Health doesn't have — never twice. Read Body Data: weight, BMI, body fat and lean body mass from your scale app (e.g. YUNMAI) are shown and analysed in the Body tab. Allow access in Health › Sharing › Apps › BP Companion.")
                     }
                 }
 
@@ -373,19 +353,6 @@ struct SettingsView: View {
         }
     }
 
-    private func sendImportedToHealth() {
-        Task {
-            do {
-                let n = try await health.sendImportedBody(bodyStore.imported)
-                healthResult = n == 0
-                    ? "Health already has all imported weigh-ins."
-                    : "Sent \(n) weigh-in\(n == 1 ? "" : "s") to Health."
-            } catch {
-                healthResult = "Could not send: \(error.localizedDescription)"
-            }
-        }
-    }
-
     private var healthAccessText: String {
         switch health.access {
         case .unavailable: return "Not available"
@@ -395,15 +362,10 @@ struct SettingsView: View {
         }
     }
 
+    /// Blood pressure readings + imported YUNMAI history, without duplicates.
     private func sendAllToHealth() {
         Task {
-            do {
-                if !health.isAuthorized { try await health.requestAuthorization() }
-                let n = try await health.sendAll(readings)
-                healthResult = "\(n) readings saved to Health."
-            } catch {
-                healthResult = "Health: \(error.localizedDescription)"
-            }
+            healthResult = await health.sendEverything(readings: readings, imported: bodyStore.imported)
         }
     }
 
