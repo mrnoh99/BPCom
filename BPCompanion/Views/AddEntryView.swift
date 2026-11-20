@@ -19,6 +19,10 @@ struct AddEntryView: View {
     @State private var systolic: Int?
     @State private var diastolic: Int?
     @State private var pulse: Int?
+    /// When the pulse came from Apple Watch (via Health); cleared when the wheel is turned.
+    @State private var watchPulseDate: Date?
+    @State private var watchMessage: String?
+    @State private var fetchingWatch = false
     @State private var date: Date
     @State private var drug: Bool
 
@@ -87,6 +91,10 @@ struct AddEntryView: View {
             }
         }
         .presentationBackground(Theme.orangeDeep)
+        .task {
+            // New entry: take the Apple Watch heart rate of the last 10 minutes, if any.
+            if editing == nil { await fetchWatchPulse(auto: true) }
+        }
     }
 
     // MARK: Tabs header
@@ -132,14 +140,26 @@ struct AddEntryView: View {
                         Spacer()
                         clearButton { systolic = nil; diastolic = nil; basicPicker = .values }
                     }
-                    HStack {
-                        Spacer().frame(width: 24)
-                        Spacer()
-                        (Text(pulse.map(String.init) ?? "--").font(.title2)
-                         + Text(" bpm").font(.subheadline))
-                            .foregroundColor(.white.opacity(0.85))
-                        Spacer()
-                        clearButton { pulse = nil; basicPicker = .values }
+                    VStack(spacing: 6) {
+                        HStack {
+                            watchButton
+                            Spacer()
+                            (Text(pulse.map(String.init) ?? "--").font(.title2)
+                             + Text(" bpm").font(.subheadline))
+                                .foregroundColor(.white.opacity(0.85))
+                            Spacer()
+                            clearButton { pulse = nil; watchPulseDate = nil; basicPicker = .values }
+                        }
+                        if let d = watchPulseDate, pulse != nil {
+                            Label("Apple Watch · \(d.formatted(.relative(presentation: .named)))",
+                                  systemImage: "applewatch")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.85))
+                        } else if let watchMessage {
+                            Text(watchMessage)
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
                     }
                     Text(Fmt.dateTime(date))
                         .font(.subheadline)
@@ -213,7 +233,7 @@ struct AddEntryView: View {
             unit("mmHg")
             wheel(Binding(get: { diastolic ?? Self.defaultDia }, set: { diastolic = $0 }), 30...180)
             unit("mmHg")
-            wheel(Binding(get: { pulse ?? Self.defaultPulse }, set: { pulse = $0 }), 30...220)
+            wheel(Binding(get: { pulse ?? Self.defaultPulse }, set: { pulse = $0; watchPulseDate = nil }), 30...220)
             unit("bpm")
         }
     }
@@ -290,6 +310,38 @@ struct AddEntryView: View {
 
     private func unit(_ s: String) -> some View {
         Text(s).font(.subheadline).foregroundStyle(.white).fixedSize()
+    }
+
+    // MARK: Apple Watch pulse
+
+    /// Reads the latest Apple Watch heart rate (last 10 minutes) from Health.
+    private var watchButton: some View {
+        Button {
+            Task { await fetchWatchPulse(auto: false) }
+        } label: {
+            Group {
+                if fetchingWatch { ProgressView().tint(.white) }
+                else { Image(systemName: "applewatch.radiowaves.left.and.right") }
+            }
+            .font(.title3)
+            .foregroundStyle(.white)
+            .frame(width: 24)
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, 12)
+        .accessibilityLabel("Pulse from Apple Watch")
+    }
+
+    private func fetchWatchPulse(auto: Bool) async {
+        fetchingWatch = true
+        defer { fetchingWatch = false }
+        if let w = await HealthSync.shared.latestWatchPulse(within: 10) {
+            pulse = w.bpm
+            watchPulseDate = w.date
+            watchMessage = nil
+        } else if !auto {
+            watchMessage = "No Apple Watch heart rate in the last 10 minutes. Open the Heart Rate app on your Watch, then tap again."
+        }
     }
 
     // MARK: Save
