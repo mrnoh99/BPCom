@@ -11,7 +11,7 @@
 | **Home** | 제목 *BP companion of Jaisung NOH*. `LAST 10 READINGS` (SYSTOLIC / DIASTOLIC / HR / MAP / WEIGHT 의 MAX·MIN·AVG), `YOUR LAST READINGS`. 우상단 **+** 로 입력 |
 | **History** | 위쪽에서 **Blood Pressure / Weight** 전환. Weight = 건강 앱(YUNMAI)의 측정 기록을 월별로(체중·직전 대비 ▲▼, BMI·등급, 체지방률, 제지방량, 시간, 출처 앱; 읽기 전용). Blood Pressure = 월별 섹션(접기/펼치기), 날짜 아이콘, 수축기/이완기(단계별 색상), 맥박, MAP, 시간, 약 복용(💊) 표시. 연필 버튼 = 편집/삭제 모드, 행을 누르면 수정 |
 | **Reports** | 좌우 스와이프로 4페이지: **Summary**(MAX/MIN/AVG 표) · **Trend**(BP/HR 꺾은선 + 평균 점선) · **Range**(구간별 횟수·비율) · **Statistics**(Max/Avg/Min 막대). 상단 From/To 와 ‹ › 로 기간 이동, 하단 **D / W / M / Y / Custom**, **All / AM / PM** 필터, 📷 버튼 = 현재 페이지 이미지로 공유 |
-| **Settings** | 1. **Export All Data (CSV)** (폴더 하나에 혈압 전체 `BloodPressure_Data_날짜.csv` + 체성분 전체 `Body_Data_날짜.csv`) 2. **Import (CSV)** (아래 Info 는 평소 접힘, 가져오기/내보내기 후 결과와 함께 펼쳐짐) 3. **iCloud Sync** 4. **Apple Health** 쓰기, 이름 변경 |
+| **Settings** | 0. **Back Up All Data / Restore from Backup** (모든 자료를 `BPCompanion_Backup_날짜.json` 하나로 저장·복원 — 혈압 기록(메모·★ 포함), 윈마이 체성분 전체, 이름; 복원 시 중복 없이 합침) 1. **Export All Data (CSV)** (폴더 하나에 혈압 전체 `BloodPressure_Data_날짜.csv` + 체성분 전체 `Body_Data_날짜.csv`) 2. **Import (CSV)** (아래 Info 는 평소 접힘, 가져오기/내보내기 후 결과와 함께 펼쳐짐) 3. **iCloud Sync** 4. **Apple Health** 쓰기, 이름 변경 |
 | **Body** | 건강 앱에서 체중계 앱(YUNMAI 등)의 **체중·BMI·체지방률·제지방량·신장**을 읽어 혈압과 별도로 분석: 최근값 카드(BMI 등급, 신장), 기간별 MAX/MIN/AVG/변화 표, 항목별 추이 그래프(평균선), 변화 분석(체지방 감소·제지방 유지 등), 기간 내 측정 기록(최신순 10개 + Show all). 기간 선택(AM/PM 구분 없음), 앱별 출처 필터, 당겨서 새로고침 |
 | **+ Add Entry** | Basic(혈압/맥박 휠 ↔ 날짜·시간 휠, Drug 스위치. 새 기록은 최근 10분 이내 **Apple Watch 심박수**를 건강 앱에서 읽어 맥박에 자동 입력, ⌚ 버튼으로 다시 읽기, 휠을 돌리면 직접 입력) · Note(메모 + ★). 체중은 입력하지 않음 → Body 탭 |
 

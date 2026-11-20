@@ -12,12 +12,13 @@ struct SettingsView: View {
     /// Value of the toggle when the app was launched (the store is configured at launch).
     @State private var launchICloudSync = UserDefaults.standard.object(forKey: SettingsKey.iCloudSync) as? Bool ?? true
 
-    @State private var exportDoc: ExportFolder?
+    @State private var exportDoc: ExportDocument?
     @State private var exportSummary = ""
+    @State private var exportName = ""
     @State private var showExporter = false
     @State private var showImporter = false
     /// One file picker for both imports (two .fileImporter modifiers on one view conflict).
-    private enum ImportKind { case bp, yunmai }
+    private enum ImportKind { case bp, yunmai, backup }
     @State private var importKind: ImportKind = .bp
     @State private var confirmDeleteImported = false
     /// Info under Export/Import: collapsed whenever Settings opens, expanded after an import/export.
@@ -47,6 +48,20 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Button {
+                        prepareBackup()
+                    } label: {
+                        Label("Back Up All Data", systemImage: "externaldrive.badge.plus")
+                    }
+                    .disabled(readings.isEmpty && bodyStore.importedCount == 0)
+
+                    Button {
+                        importKind = .backup
+                        showImporter = true
+                    } label: {
+                        Label("Restore from Backup", systemImage: "arrow.counterclockwise")
+                    }
+
                     Button {
                         Task { await prepareExport() }
                     } label: {
@@ -257,8 +272,8 @@ struct SettingsView: View {
             .orangeNavigationBar()
             .fileExporter(isPresented: $showExporter,
                           document: exportDoc,
-                          contentType: .folder,
-                          defaultFilename: "BPCompanion_Export_\(Self.fileDate.string(from: .now))") { result in
+                          contentType: exportDoc?.contentType ?? .json,
+                          defaultFilename: exportName) { result in
                 switch result {
                 case .success: showDataResult(exportSummary)
                 case .failure(let error): showDataResult("Export failed: \(error.localizedDescription)", error: true)
@@ -267,10 +282,14 @@ struct SettingsView: View {
             .fileImporter(isPresented: $showImporter,
                           allowedContentTypes: importKind == .bp
                             ? [.commaSeparatedText, .plainText, .text]
-                            : [.item]) { result in
+                            : (importKind == .backup ? [.json] : [.item])) { result in
                 switch result {
                 case .success(let url):
-                    if importKind == .yunmai { importYunmai(url) } else { importCSV(url) }
+                    switch importKind {
+                    case .yunmai: importYunmai(url)
+                    case .backup: restoreBackup(url)
+                    case .bp: importCSV(url)
+                    }
                 case .failure(let error): showDataResult("Import failed: \(error.localizedDescription)", error: true)
                 }
             }
@@ -323,12 +342,36 @@ struct SettingsView: View {
         await bodyStore.refresh()
         let day = Self.fileDate.string(from: .now)
         let body = CSV.exportBody()
-        exportDoc = ExportFolder(files: [
+        exportDoc = ExportDocument(.folder([
             "BloodPressure_Data_\(day).csv": CSV.export(readings),
             "Body_Data_\(day).csv": body.text,
-        ])
+        ]))
+        exportName = "BPCompanion_Export_\(day)"
         exportSummary = "Exported \(readings.count) blood pressure readings and \(body.count) weigh-ins."
         showExporter = true
+    }
+
+    /// One JSON file with everything (readings incl. notes and stars, body records, name),
+    /// for restoring after reinstalling or on a new device.
+    private func prepareBackup() {
+        do {
+            let b = try Backup.make(context: context)
+            exportDoc = ExportDocument(.backup(b.data))
+            exportName = "BPCompanion_Backup_\(Self.fileDate.string(from: .now))"
+            exportSummary = "Backed up \(b.readings) blood pressure readings and \(b.body) weigh-ins."
+            showExporter = true
+        } catch {
+            showDataResult("Backup failed: \(error.localizedDescription)", error: true)
+        }
+    }
+
+    private func restoreBackup(_ url: URL) {
+        do {
+            showDataResult(try Backup.restore(from: url, into: context))
+            Task { await bodyStore.refresh() }
+        } catch {
+            showDataResult("Restore failed: \(error.localizedDescription)", error: true)
+        }
     }
 
     private func importYunmai(_ url: URL) {

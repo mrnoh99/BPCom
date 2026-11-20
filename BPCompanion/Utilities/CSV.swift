@@ -310,25 +310,3 @@ extension CSV {
         return (lines.joined(separator: "\n"), items.count)
     }
 }
-
-/// "Export All Data": a folder with the blood pressure CSV and the body data CSV.
-struct ExportFolder: FileDocument {
-    static var readableContentTypes: [UTType] { [.folder] }
-    var files: [String: String]   // file name → CSV text
-
-    init(files: [String: String]) { self.files = files }
-
-    init(configuration: ReadConfiguration) throws {
-        throw CocoaError(.fileReadUnsupportedScheme)
-    }
-
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        var wrappers: [String: FileWrapper] = [:]
-        for (name, text) in files {
-            let w = FileWrapper(regularFileWithContents: Data(text.utf8))
-            w.preferredFilename = name
-            wrappers[name] = w
-        }
-        return FileWrapper(directoryWithFileWrappers: wrappers)
-    }
-}
