@@ -236,8 +236,82 @@ final class HealthSync: ObservableObject {
         accessChecked += 1
     }
 
+    // MARK: Imported YUNMAI history → Health
+
+    /// Writes imported YUNMAI weigh-ins to Health (weight, BMI, body fat, lean mass, height)
+    /// for the minutes Health does not already have. Each sample has a sync identifier
+    /// ("yunmai.<minute>.<type>"), so sending again replaces instead of duplicating.
+    /// Returns the number of weigh-ins written.
+    func sendImportedBody(_ records: [BodyStore.Imported]) async throws -> Int {
+        guard isAvailable else { throw HealthError.unavailable }
+        let types: [HKQuantityType] = [HKQuantityType(.bodyMass), HKQuantityType(.bodyMassIndex),
+                                       HKQuantityType(.bodyFatPercentage), HKQuantityType(.leanBodyMass),
+                                       HKQuantityType(.height)]
+        try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
+            store.requestAuthorization(toShare: Set(types), read: Set(types)) { _, error in
+                if let error { c.resume(throwing: error) } else { c.resume() }
+            }
+        }
+        guard store.authorizationStatus(for: HKQuantityType(.bodyMass)) == .sharingAuthorized else {
+            throw HealthError.notAllowed
+        }
+
+        // What Health already has (YUNMAI's own samples, from any device).
+        let body = BodyStore.shared
+        await body.refresh()
+        let have: [BodyStore.Metric: Set<Int>] = Dictionary(uniqueKeysWithValues:
+            BodyStore.Metric.allCases.map { ($0, body.healthMinutes($0)) })
+        let haveHeight = body.healthHeightMinutes
+
+        var objects: [HKObject] = []
+        var written = 0
+        for r in records {
+            let minute = BodyStore.minute(r.date)
+            var wroteAny = false
+            func add(_ type: HKQuantityType, _ unit: HKUnit, _ value: Double?, _ tag: String, skip: Bool) {
+                guard let value, value > 0, !skip else { return }
+                let meta: [String: Any] = [HKMetadataKeySyncIdentifier: "yunmai.\(minute).\(tag)",
+                                           HKMetadataKeySyncVersion: 1,
+                                           "BPCompanionImportedFrom": r.source]
+                objects.append(HKQuantitySample(type: type, quantity: HKQuantity(unit: unit, doubleValue: value),
+                                                start: r.date, end: r.date, metadata: meta))
+                wroteAny = true
+            }
+            add(HKQuantityType(.bodyMass), .gramUnit(with: .kilo), r.weight, "kg",
+                skip: have[.weight]?.contains(minute) == true)
+            add(HKQuantityType(.bodyMassIndex), .count(), r.bmi, "bmi",
+                skip: have[.bmi]?.contains(minute) == true)
+            add(HKQuantityType(.bodyFatPercentage), .percent(), r.bodyFat.map { $0 / 100 }, "fat",
+                skip: have[.bodyFat]?.contains(minute) == true)
+            add(HKQuantityType(.leanBodyMass), .gramUnit(with: .kilo), r.leanMass, "lean",
+                skip: have[.leanMass]?.contains(minute) == true)
+            add(HKQuantityType(.height), .meterUnit(with: .centi), r.height, "cm",
+                skip: haveHeight.contains(minute))
+            if wroteAny { written += 1 }
+        }
+
+        busy = true
+        defer { busy = false }
+        var start = 0
+        while start < objects.count {
+            let chunk = Array(objects[start..<min(start + 500, objects.count)])
+            try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
+                store.save(chunk) { _, error in
+                    if let error { c.resume(throwing: error) } else { c.resume() }
+                }
+            }
+            start += 500
+        }
+        return written
+    }
+
     enum HealthError: LocalizedError {
-        case unavailable
-        var errorDescription: String? { "Apple Health is not available on this device." }
+        case unavailable, notAllowed
+        var errorDescription: String? {
+            switch self {
+            case .unavailable: return "Apple Health is not available on this device."
+            case .notAllowed: return "Writing weight to Health was not allowed. Turn it on in Health › Sharing › Apps › BP Companion."
+            }
+        }
     }
 }
